@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pydantic-marshmallow"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Bring Pydantic's power to Marshmallow: type annotations, validators, and automatic schema generation"
 readme = "README.md"
 license = {text = "MIT"}
@@ -74,6 +74,11 @@ Issues = "https://github.com/mockodin/pydantic-marshmallow/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools_scm]
+# Get version from git tags (e.g., v1.0.0 -> 1.0.0)
+version_scheme = "guess-next-dev"
+local_scheme = "no-local-version"
 
 # =============================================================================
 # PYTEST CONFIGURATION
