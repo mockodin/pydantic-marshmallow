@@ -13,22 +13,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+        run: uv python install 3.11
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: uv sync --all-extras
 
       - name: Lint with ruff
-        run: ruff check src/pydantic_marshmallow/ tests/
+        run: uv run ruff check src/pydantic_marshmallow/ tests/
 
       - name: Lint with flake8
-        run: flake8 src/pydantic_marshmallow/ tests/
+        run: uv run flake8 src/pydantic_marshmallow/ tests/
 
       - name: Type check with mypy
-        run: mypy src/pydantic_marshmallow/
+        run: uv run mypy src/pydantic_marshmallow/
 
   test:
     name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
@@ -57,16 +58,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: uv sync --all-extras
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short
+        run: uv run pytest tests/ -v --tb=short
 
   # This job is used as the required status check for branch protection
   # Configure GitHub: Settings > Branches > Branch protection > Require "CI Passed"
