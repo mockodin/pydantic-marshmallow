@@ -23,6 +23,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
@@ -209,7 +211,7 @@ unfixable = [
     "UP035",   # typing.List etc still valid
     "UP045",   # Optional[X] is fine for readability
     "SIM118",  # .keys() is fine for clarity
-    "SIM105",  # try-except-pass patterns OK in tests  
+    "SIM105",  # try-except-pass patterns OK in tests
     "B011",    # assert False is intentional in tests
     "B007",    # Unused loop variables OK in tests
     "F401",    # Unused imports OK (pytest_benchmark availability check)
