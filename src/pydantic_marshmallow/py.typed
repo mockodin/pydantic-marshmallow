@@ -1,0 +1,2 @@
+# Marker file for PEP 561.
+# The marshmallow-pydantic package uses inline type hints.
