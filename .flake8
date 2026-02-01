@@ -1,0 +1,82 @@
+# =============================================================================
+# FLAKE8 CONFIGURATION
+# Note: Flake8 doesn't support pyproject.toml, so we use .flake8
+# =============================================================================
+[flake8]
+# Line length (matches black/ruff)
+max-line-length = 160
+
+# Complexity
+max-complexity = 15
+
+# Select rules (via plugins)
+# E/W: pycodestyle
+# F: pyflakes
+# B: bugbear
+# C4: comprehensions
+# SIM: simplify
+extend-select = B,C4,SIM
+
+# Ignore rules
+ignore =
+    # Line length handled by formatter
+    E501,
+    # Whitespace before ':' - conflicts with black
+    E203,
+    # Line break before binary operator - conflicts with black
+    W503,
+    # Missing docstring in public module
+    D100,
+    # Missing docstring in public package
+    D104,
+    # Missing docstring in __init__
+    D107,
+    # First line should be in imperative mood
+    D401,
+    # Comparison to False should be 'if cond is False:' - SQLAlchemy requires == False
+    E712,
+    # Use ternary instead of nested if (style preference, already in ruff)
+    SIM102,
+    # Use dict.get() (style preference, already in ruff)
+    SIM401,
+    # Star-arg unpacking (already in ruff ignore)
+    B026,
+
+# Exclude directories
+exclude =
+    .git,
+    .mypy_cache,
+    .ruff_cache,
+    .venv,
+    __pycache__,
+    htmlcov,
+    build,
+    dist,
+    *.egg-info,
+    .eggs,
+
+# Per-file ignores
+per-file-ignores =
+    # Tests can use assert and don't need full docstrings
+    tests/*:S101,D,
+    # Allow print in run.py
+    run.py:T201,
+    # Allow unused imports in __init__.py (re-exports)
+    */__init__.py:F401,
+    # Allow late imports in services (circular import prevention)
+    app/services/*:E402,
+
+# Show source code for errors
+show-source = true
+
+# Show error codes in output
+show-pep8-errors = true
+
+# Statistics
+statistics = true
+
+# Count errors
+count = true
+
+# Docstring convention (google style)
+docstring-convention = google
