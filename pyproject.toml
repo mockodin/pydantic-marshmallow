@@ -44,6 +44,8 @@ dev = [
     # Linting/typing
     "mypy>=1.0.0",
     "ruff>=0.1.0",
+    "flake8>=7.0.0",
+    "flake8-pyproject>=1.2.0",  # Enable flake8 to read pyproject.toml
     # Third-party compatibility testing (all optional at runtime)
     "sqlalchemy>=2.0.0",
     "marshmallow-sqlalchemy>=1.0.0",
@@ -238,3 +240,22 @@ max-complexity = 40
 [tool.flake8]
 max-complexity = 40
 max-line-length = 120
+ignore = [
+    "E501",  # Line length handled by formatter
+    "E203",  # Whitespace before ':' - conflicts with black
+    "W503",  # Line break before binary operator
+]
+per-file-ignores = [
+    # Tests: allow unused imports/vars, flexible whitespace
+    "tests/*:F401,F841,E302,E303",
+    # __init__.py: allow unused imports (re-exports)
+    "*/__init__.py:F401",
+]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+]

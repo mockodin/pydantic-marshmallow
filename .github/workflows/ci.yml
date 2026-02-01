@@ -32,6 +32,7 @@ jobs:
 
   test:
     name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    needs: [lint]  # Only run tests after lint passes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

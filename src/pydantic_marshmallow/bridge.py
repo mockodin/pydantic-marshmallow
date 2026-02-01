@@ -7,23 +7,17 @@ Flow: Input → Marshmallow pre_load → PYDANTIC VALIDATES → Marshmallow post
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from collections.abc import Set as AbstractSet
-from typing import (Any, Callable, ClassVar, Generic, TypeVar, cast, get_args,
-                    get_origin)
+from collections.abc import Sequence, Set as AbstractSet
+from typing import Any, Callable, ClassVar, Generic, TypeVar, cast, get_args, get_origin
 
-from marshmallow import EXCLUDE, INCLUDE, RAISE, Schema
-from marshmallow import fields as ma_fields
+from marshmallow import EXCLUDE, INCLUDE, RAISE, Schema, fields as ma_fields
 from marshmallow.decorators import VALIDATES, VALIDATES_SCHEMA
 from marshmallow.error_store import ErrorStore
-from marshmallow.exceptions import \
-    ValidationError as MarshmallowValidationError
+from marshmallow.exceptions import ValidationError as MarshmallowValidationError
 from marshmallow.schema import SchemaMeta
-from pydantic import BaseModel, ConfigDict
-from pydantic import ValidationError as PydanticValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError as PydanticValidationError
 
-from .errors import (BridgeValidationError, convert_pydantic_errors,
-                     format_pydantic_error)
+from .errors import BridgeValidationError, convert_pydantic_errors, format_pydantic_error
 from .field_conversion import convert_model_fields, convert_pydantic_field
 from .validators import cache_validators
 
