@@ -1,6 +1,9 @@
 name: Release
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       dry_run:
@@ -36,7 +39,7 @@ jobs:
         id: semantic
         uses: cycjimmy/semantic-release-action@v4
         with:
-          dry_run: ${{ inputs.dry_run }}
+          dry_run: ${{ inputs.dry_run || false }}
           extra_plugins: |
             conventional-changelog-conventionalcommits
         env:
@@ -45,7 +48,7 @@ jobs:
   build:
     name: Build Package
     needs: release
-    if: needs.release.outputs.new_release_published == 'true' && inputs.dry_run == false
+    if: needs.release.outputs.new_release_published == 'true' && (inputs.dry_run == false || inputs.dry_run == null)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -69,7 +72,7 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: [release, build]
-    if: needs.release.outputs.new_release_published == 'true' && inputs.dry_run == false
+    if: needs.release.outputs.new_release_published == 'true' && (inputs.dry_run == false || inputs.dry_run == null)
     runs-on: ubuntu-latest
     environment: pypi  # Requires approval if configured in GitHub Settings
     permissions:
