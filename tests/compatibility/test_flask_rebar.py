@@ -4,7 +4,6 @@ Tests for flask-rebar integration.
 Verifies that PydanticSchema works correctly with flask-rebar
 for building REST APIs with automatic Swagger/OpenAPI documentation.
 """
-from typing import List, Optional
 
 import pytest
 from marshmallow import Schema
@@ -31,12 +30,12 @@ pytestmark = pytest.mark.skipif(
 class UserPydantic(BaseModel):
     """User model for API."""
 
-    id: Optional[int] = Field(default=None, description="User ID")
+    id: int | None = Field(default=None, description="User ID")
     name: str = Field(min_length=1, max_length=100, description="User's full name")
     email: str = Field(
         pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$", description="User's email address"
     )
-    age: Optional[int] = Field(default=None, ge=0, le=150, description="User's age")
+    age: int | None = Field(default=None, ge=0, le=150, description="User's age")
 
     @field_validator("name")
     @classmethod
@@ -53,33 +52,33 @@ class UserCreatePydantic(BaseModel):
     email: str = Field(
         pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$", description="User's email address"
     )
-    age: Optional[int] = Field(default=None, ge=0, le=150, description="User's age")
+    age: int | None = Field(default=None, ge=0, le=150, description="User's age")
 
 
 class UserUpdatePydantic(BaseModel):
     """User update request model (partial)."""
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         default=None, min_length=1, max_length=100, description="User's full name"
     )
-    email: Optional[str] = Field(
+    email: str | None = Field(
         default=None,
         pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$",
         description="User's email address",
     )
-    age: Optional[int] = Field(default=None, ge=0, le=150, description="User's age")
+    age: int | None = Field(default=None, ge=0, le=150, description="User's age")
 
 
 class ProductPydantic(BaseModel):
     """Product model for API."""
 
-    id: Optional[int] = Field(default=None, description="Product ID")
+    id: int | None = Field(default=None, description="Product ID")
     name: str = Field(min_length=1, max_length=200, description="Product name")
     price: float = Field(gt=0, description="Product price")
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None, max_length=1000, description="Product description"
     )
-    tags: List[str] = Field(default_factory=list, description="Product tags")
+    tags: list[str] = Field(default_factory=list, description="Product tags")
 
 
 class SearchQueryPydantic(BaseModel):

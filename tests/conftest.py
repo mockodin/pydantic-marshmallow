@@ -8,7 +8,7 @@ than redefining them in each test file.
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -40,7 +40,7 @@ class ValidatedUser(BaseModel):
 class UserWithDefaults(BaseModel):
     """User model with optional fields and defaults."""
     name: str
-    email: Optional[str] = None
+    email: str | None = None
     age: int = 0
     active: bool = True
 
@@ -102,8 +102,8 @@ class Item(BaseModel):
 class Order(BaseModel):
     """Order with nested items collection."""
     customer: str
-    items: List[Item]
-    total: Optional[float] = None
+    items: list[Item]
+    total: float | None = None
 
 
 # =============================================================================
@@ -124,8 +124,8 @@ class EntityWithTypes(BaseModel):
     amount: Decimal
     created_at: datetime
     event_date: date
-    tags: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     status: Status = Status.PENDING
 
 
@@ -304,7 +304,7 @@ class UserSchemaWithPreLoad(PydanticSchema[SimpleUser]):
         model = SimpleUser
 
     @pre_load
-    def normalize_data(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def normalize_data(self, data: dict[str, Any], **kwargs) -> dict[str, Any]:
         if "email" in data:
             data["email"] = data["email"].lower().strip()
         if "name" in data:

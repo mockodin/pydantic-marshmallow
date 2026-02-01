@@ -3,8 +3,6 @@
 Tests @computed_field decorator integration with Marshmallow dump().
 """
 
-from typing import Optional
-
 import pytest
 from pydantic import BaseModel, computed_field
 
@@ -85,11 +83,11 @@ class TestComputedFieldWithExclusions:
         """Computed field returning None is excluded with exclude_none=True."""
         class Product(BaseModel):
             price: float
-            discount: Optional[float] = None
+            discount: float | None = None
 
             @computed_field
             @property
-            def final_price(self) -> Optional[float]:
+            def final_price(self) -> float | None:
                 if self.discount is None:
                     return None
                 return self.price * (1 - self.discount)
@@ -107,11 +105,11 @@ class TestComputedFieldWithExclusions:
         """Computed field with value is included when exclude_none=True."""
         class Product(BaseModel):
             price: float
-            discount: Optional[float] = None
+            discount: float | None = None
 
             @computed_field
             @property
-            def final_price(self) -> Optional[float]:
+            def final_price(self) -> float | None:
                 if self.discount is None:
                     return None
                 return self.price * (1 - self.discount)

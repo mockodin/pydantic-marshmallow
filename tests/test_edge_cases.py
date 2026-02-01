@@ -6,7 +6,7 @@ Tests cover boundary conditions, complex types, and unusual scenarios.
 from datetime import date, datetime, time
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Literal, Optional, Set, Tuple, Union
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import pytest
@@ -100,7 +100,7 @@ class TestComplexTypes:
     def test_union_types(self):
         """Test Union type handling."""
         class Flexible(BaseModel):
-            value: Union[int, str]
+            value: int | str
 
         schema = schema_for(Flexible)()
 
@@ -115,7 +115,7 @@ class TestComplexTypes:
     def test_dict_field(self):
         """Test Dict field with typed values."""
         class Settings(BaseModel):
-            options: Dict[str, int]
+            options: dict[str, int]
 
         schema = schema_for(Settings)()
 
@@ -125,8 +125,8 @@ class TestComplexTypes:
     def test_set_and_frozenset(self):
         """Test Set and FrozenSet fields."""
         class Tags(BaseModel):
-            tags: Set[str]
-            immutable_tags: FrozenSet[str] = frozenset()
+            tags: set[str]
+            immutable_tags: frozenset[str] = frozenset()
 
         schema = schema_for(Tags)()
 
@@ -141,7 +141,7 @@ class TestComplexTypes:
     def test_tuple_field(self):
         """Test Tuple field with fixed types."""
         class Point(BaseModel):
-            coordinates: Tuple[float, float, float]
+            coordinates: tuple[float, float, float]
 
         schema = schema_for(Point)()
 
@@ -164,7 +164,7 @@ class TestNestedAndRecursive:
 
         class Country(BaseModel):
             name: str
-            states: List[State]
+            states: list[State]
 
         schema = schema_for(Country)()
 
@@ -190,7 +190,7 @@ class TestNestedAndRecursive:
         """Test self-referential models (tree structures)."""
         class TreeNode(BaseModel):
             value: int
-            children: List["TreeNode"] = []
+            children: list["TreeNode"] = []
 
         # Rebuild model to resolve forward reference
         TreeNode.model_rebuild()
@@ -218,7 +218,7 @@ class TestNestedAndRecursive:
 
         class Employee(BaseModel):
             name: str
-            manager: Optional[Manager] = None
+            manager: Manager | None = None
 
         schema = schema_for(Employee)()
 
@@ -250,7 +250,7 @@ class TestBoundaryConditions:
     def test_empty_list(self):
         """Test empty list handling."""
         class Container(BaseModel):
-            items: List[str]
+            items: list[str]
 
         schema = schema_for(Container)()
 
@@ -260,7 +260,7 @@ class TestBoundaryConditions:
     def test_empty_dict(self):
         """Test empty dict handling."""
         class Metadata(BaseModel):
-            data: Dict[str, Any]
+            data: dict[str, Any]
 
         schema = schema_for(Metadata)()
 
@@ -271,8 +271,8 @@ class TestBoundaryConditions:
         """Test distinction between null and missing values."""
         class Profile(BaseModel):
             name: str
-            bio: Optional[str] = None
-            website: Optional[str] = "https://example.com"
+            bio: str | None = None
+            website: str | None = "https://example.com"
 
         schema = schema_for(Profile)()
 
@@ -398,7 +398,7 @@ class TestValidationConstraints:
     def test_list_constraints(self):
         """Test list length constraints."""
         class Team(BaseModel):
-            members: List[str] = Field(min_length=1, max_length=5)
+            members: list[str] = Field(min_length=1, max_length=5)
 
         schema = schema_for(Team)()
 

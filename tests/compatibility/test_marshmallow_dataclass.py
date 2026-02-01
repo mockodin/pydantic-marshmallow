@@ -5,7 +5,6 @@ Verifies that PydanticSchema works correctly alongside marshmallow-dataclass
 which provides similar functionality for Python dataclasses.
 """
 from dataclasses import dataclass, field as dataclass_field
-from typing import List, Optional
 
 import pytest
 from marshmallow import Schema
@@ -35,7 +34,7 @@ class AddressDataclass:
     street: str
     city: str
     country: str = "USA"
-    zip_code: Optional[str] = None
+    zip_code: str | None = None
 
 
 @dataclass
@@ -44,8 +43,8 @@ class UserDataclass:
 
     name: str
     email: str
-    age: Optional[int] = None
-    address: Optional[AddressDataclass] = None
+    age: int | None = None
+    address: AddressDataclass | None = None
 
 
 @dataclass
@@ -54,8 +53,8 @@ class ProductDataclass:
 
     name: str
     price: float
-    tags: List[str] = dataclass_field(default_factory=list)
-    description: Optional[str] = None
+    tags: list[str] = dataclass_field(default_factory=list)
+    description: str | None = None
 
 
 # Pydantic models (for comparison)
@@ -65,7 +64,7 @@ class AddressPydantic(BaseModel):
     street: str
     city: str
     country: str = "USA"
-    zip_code: Optional[str] = None
+    zip_code: str | None = None
 
 
 class UserPydantic(BaseModel):
@@ -73,8 +72,8 @@ class UserPydantic(BaseModel):
 
     name: str = Field(min_length=1)
     email: str
-    age: Optional[int] = Field(default=None, ge=0)
-    address: Optional[AddressPydantic] = None
+    age: int | None = Field(default=None, ge=0)
+    address: AddressPydantic | None = None
 
 
 class ProductPydantic(BaseModel):
@@ -82,8 +81,8 @@ class ProductPydantic(BaseModel):
 
     name: str = Field(min_length=1)
     price: float = Field(gt=0)
-    tags: List[str] = Field(default_factory=list)
-    description: Optional[str] = None
+    tags: list[str] = Field(default_factory=list)
+    description: str | None = None
 
 
 class TestMarshmallowDataclassBaseline:

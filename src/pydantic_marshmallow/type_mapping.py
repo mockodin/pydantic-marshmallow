@@ -5,6 +5,7 @@ This module provides type-to-field conversions, leveraging Marshmallow's native
 TYPE_MAPPING for basic types and adding support for generic collections.
 """
 from enum import Enum as PyEnum
+from types import UnionType
 from typing import Any, Literal, Union, get_args, get_origin
 
 from marshmallow import Schema, fields as ma_fields
@@ -20,8 +21,9 @@ def type_to_marshmallow_field(type_hint: Any) -> ma_fields.Field:
 
     Uses Marshmallow's native TYPE_MAPPING for basic types (str, int, datetime, etc.)
     and adds support for:
-    - Generic collections (List[T], Dict[K,V], Set[T], FrozenSet[T])
-    - Optional/Union types
+    - Generic collections (list[T], dict[K, V], set[T], frozenset[T])
+    - Optional types (T | None)
+    - Union types (X | Y)
     - Tuple types
     - Nested Pydantic models
     - Enums
@@ -49,8 +51,8 @@ def type_to_marshmallow_field(type_hint: Any) -> ma_fields.Field:
             return ma_fields.Raw()
         return ma_fields.Raw()
 
-    # Handle Union (including Optional)
-    if origin is Union:
+    # Handle Union (including Optional) - supports both Union[X, Y] and X | Y syntax
+    if origin is Union or origin is UnionType:
         non_none_args = [a for a in args if a is not type(None)]
         if len(non_none_args) == 1:
             field = type_to_marshmallow_field(non_none_args[0])
@@ -82,15 +84,15 @@ def type_to_marshmallow_field(type_hint: Any) -> ma_fields.Field:
         finally:
             _processing_models.discard(type_hint)
 
-    # Handle List[T]
-    if origin in (list, list):
+    # Handle list[T]
+    if origin is list:
         inner: ma_fields.Field = ma_fields.Raw()
         if args:
             inner = type_to_marshmallow_field(args[0])
         return ma_fields.List(inner)
 
-    # Handle Dict[K, V]
-    if origin in (dict, dict):
+    # Handle dict[K, V]
+    if origin is dict:
         key_field: ma_fields.Field = ma_fields.String()
         value_field: ma_fields.Field = ma_fields.Raw()
         if args and len(args) >= 2:
@@ -98,8 +100,8 @@ def type_to_marshmallow_field(type_hint: Any) -> ma_fields.Field:
             value_field = type_to_marshmallow_field(args[1])
         return ma_fields.Dict(keys=key_field, values=value_field)
 
-    # Handle Set[T] and FrozenSet[T] - convert to List in Marshmallow
-    if origin in (set, set, frozenset, frozenset):
+    # Handle set[T] and frozenset[T] - convert to List in Marshmallow
+    if origin in (set, frozenset):
         inner_set: ma_fields.Field = ma_fields.Raw()
         if args:
             inner_set = type_to_marshmallow_field(args[0])

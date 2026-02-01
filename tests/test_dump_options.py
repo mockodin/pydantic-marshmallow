@@ -4,8 +4,6 @@ Tests Pydantic's exclude_unset, exclude_defaults, exclude_none options
 exposed through the Marshmallow bridge.
 """
 
-from typing import Optional
-
 from pydantic import BaseModel, computed_field
 
 from pydantic_marshmallow import schema_for
@@ -18,8 +16,8 @@ class TestExcludeNone:
         """exclude_none removes None values from dump output."""
         class User(BaseModel):
             name: str
-            nickname: Optional[str] = None
-            bio: Optional[str] = None
+            nickname: str | None = None
+            bio: str | None = None
 
         schema = schema_for(User)()
         user = User(name="Alice", bio="Developer")
@@ -38,7 +36,7 @@ class TestExcludeNone:
         """exclude_none works with many=True."""
         class Item(BaseModel):
             name: str
-            quantity: Optional[int] = None
+            quantity: int | None = None
 
         schema = schema_for(Item)()
         items = [
@@ -54,8 +52,8 @@ class TestExcludeNone:
         """exclude_none preserves non-None optional values."""
         class Profile(BaseModel):
             name: str
-            avatar_url: Optional[str] = None
-            status: Optional[str] = None
+            avatar_url: str | None = None
+            status: str | None = None
 
         schema = schema_for(Profile)()
         profile = Profile(name="Alice", avatar_url="http://example.com/avatar.jpg")
@@ -153,7 +151,7 @@ class TestExcludeDefaults:
         """Field with None default is excluded when value is None."""
         class Profile(BaseModel):
             name: str
-            bio: Optional[str] = None
+            bio: str | None = None
 
         schema = schema_for(Profile)()
         profile = Profile(name="Alice", bio=None)
@@ -171,7 +169,7 @@ class TestCombinedExclusionOptions:
         class Record(BaseModel):
             id: int
             name: str
-            description: Optional[str] = None
+            description: str | None = None
             status: str = "active"
 
         schema = schema_for(Record)()
@@ -187,7 +185,7 @@ class TestCombinedExclusionOptions:
         """Combine exclude_defaults and exclude_none."""
         class Config(BaseModel):
             enabled: bool = False
-            value: Optional[int] = None
+            value: int | None = None
 
         schema = schema_for(Config)()
         config = Config(enabled=False, value=None)
@@ -201,7 +199,7 @@ class TestCombinedExclusionOptions:
         class Item(BaseModel):
             id: int
             name: str
-            description: Optional[str] = None
+            description: str | None = None
             active: bool = True
             extra: str = ""
 
@@ -225,11 +223,11 @@ class TestExclusionOptionsWithComputedFields:
         """exclude_none removes None computed fields."""
         class Product(BaseModel):
             price: float
-            discount: Optional[float] = None
+            discount: float | None = None
 
             @computed_field
             @property
-            def final_price(self) -> Optional[float]:
+            def final_price(self) -> float | None:
                 if self.discount is None:
                     return None
                 return self.price * (1 - self.discount)
@@ -268,7 +266,7 @@ class TestExclusionOptionsEdgeCases:
         class AllDefaults(BaseModel):
             a: str = "default_a"
             b: int = 0
-            c: Optional[str] = None
+            c: str | None = None
 
         schema = schema_for(AllDefaults)()
         obj = AllDefaults()

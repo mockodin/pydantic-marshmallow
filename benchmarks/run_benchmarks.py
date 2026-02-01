@@ -22,17 +22,14 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime
-from decimal import Decimal
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Literal
 
+from marshmallow import EXCLUDE, Schema, fields as ma_fields, post_load, pre_load, validate
 from pydantic import BaseModel, EmailStr, Field, computed_field, field_validator, model_validator
-from marshmallow import Schema, fields as ma_fields, validate, pre_load, post_load, validates, EXCLUDE
 
 from pydantic_marshmallow import PydanticSchema, schema_for
-
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -43,7 +40,6 @@ from benchmarks.benchmark_framework import (
     format_comparison_table,
     format_results_table,
 )
-
 
 # =============================================================================
 # Pydantic Models for Benchmarks
@@ -104,7 +100,7 @@ class DateRange(BaseModel):
     end: str
 
     @model_validator(mode="after")
-    def check_dates(self) -> "DateRange":
+    def check_dates(self) -> DateRange:
         if self.end < self.start:
             raise ValueError("end must be after start")
         return self
@@ -138,14 +134,14 @@ class Level2(BaseModel):
     """Deeply nested level 2."""
 
     name: str
-    items: List[Level3]
+    items: list[Level3]
 
 
 class Level1(BaseModel):
     """Deeply nested level 1."""
 
     title: str
-    sections: List[Level2]
+    sections: list[Level2]
 
 
 class DeepRoot(BaseModel):
@@ -173,8 +169,8 @@ class TaskWithEnum(BaseModel):
 class FlexibleModel(BaseModel):
     """Model with Union type."""
 
-    value: Union[int, str]
-    items: List[Union[str, int]]
+    value: int | str
+    items: list[str | int]
 
 
 class ProductWithAlias(BaseModel):
@@ -207,7 +203,7 @@ class DogModel(DiscriminatedBase):
 class PetContainer(BaseModel):
     """Container with discriminated union."""
 
-    pet: Union[CatModel, DogModel] = Field(discriminator="type")
+    pet: CatModel | DogModel = Field(discriminator="type")
 
 
 # =============================================================================
@@ -633,7 +629,7 @@ def create_batch_suite() -> BenchmarkSuite:
         ma_batch_schema.load(BATCH_100)
 
     # Batch 100 - Raw Pydantic (TypeAdapter)
-    list_adapter = TypeAdapter(List[SimpleUser])
+    list_adapter = TypeAdapter(list[SimpleUser])
 
     @suite.add("batch_100_raw_pydantic")
     def bench_batch_100_pydantic():

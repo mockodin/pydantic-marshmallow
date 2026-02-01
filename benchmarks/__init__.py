@@ -8,15 +8,15 @@ This package provides:
 from .benchmark_framework import (
     BenchmarkResult,
     BenchmarkSuite,
-    run_benchmark,
     compare_results,
     format_comparison_table,
+    run_benchmark,
 )
 
 __all__ = [
     "BenchmarkResult",
     "BenchmarkSuite",
-    "run_benchmark",
     "compare_results",
     "format_comparison_table",
+    "run_benchmark",
 ]

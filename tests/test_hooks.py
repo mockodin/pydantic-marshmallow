@@ -4,7 +4,7 @@ These tests verify that all Marshmallow hooks (pre_load, post_load,
 pre_dump, post_dump) work correctly with the Pydantic bridge.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 from marshmallow import ValidationError, post_dump, post_load, pre_dump, pre_load
@@ -27,14 +27,14 @@ class TestPreLoadHooks:
                 model = User
 
             @pre_load
-            def normalize_email(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def normalize_email(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 """Normalize email to lowercase before validation."""
                 if "email" in data:
                     data["email"] = data["email"].lower().strip()
                 return data
 
             @pre_load
-            def normalize_name(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def normalize_name(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 """Trim whitespace from name."""
                 if "name" in data:
                     data["name"] = data["name"].strip()
@@ -60,7 +60,7 @@ class TestPreLoadHooks:
                 model = Config
 
             @pre_load
-            def add_defaults(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def add_defaults(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 """Add default version if not provided."""
                 if "version" not in data:
                     data["version"] = "1.0.0"
@@ -83,7 +83,7 @@ class TestPreLoadHooks:
                 model = User
 
             @pre_load
-            def rename_legacy_fields(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def rename_legacy_fields(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 """Support legacy API field names."""
                 if "id" in data and "user_id" not in data:
                     data["user_id"] = data.pop("id")
@@ -112,7 +112,7 @@ class TestPreLoadHooks:
                 model = Submission
 
             @pre_load
-            def check_not_empty(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def check_not_empty(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 """Reject if all values are empty."""
                 if all(not v for v in data.values()):
                     raise ValidationError("Submission cannot be empty")
@@ -223,7 +223,7 @@ class TestPostDumpHooks:
                 model = User
 
             @post_dump
-            def add_links(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def add_links(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 """Add HATEOAS-style links to output."""
                 data["_links"] = {
                     "self": f"/api/users/{data['id']}",
@@ -251,7 +251,7 @@ class TestPostDumpHooks:
                 model = InternalUser
 
             @post_dump
-            def remove_internal(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def remove_internal(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 """Remove internal fields from public API."""
                 data.pop("internal_flag", None)
                 return data
@@ -280,7 +280,7 @@ class TestPostDumpHooks:
                 model = User
 
             @post_dump
-            def camelize_keys(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def camelize_keys(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 """Convert all keys to camelCase."""
                 return {to_camel_case(k): v for k, v in data.items()}
 
@@ -313,7 +313,7 @@ class TestMultipleHooks:
                 model = User
 
             @pre_load
-            def log_pre_load(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def log_pre_load(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 hook_calls.append("pre_load")
                 # Normalize input
                 data["email"] = data.get("email", "").lower()
@@ -331,7 +331,7 @@ class TestMultipleHooks:
                 return data
 
             @post_dump
-            def log_post_dump(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def log_post_dump(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 hook_calls.append("post_dump")
                 data["_serialized"] = True
                 return data
@@ -370,7 +370,7 @@ class TestHooksWithMany:
                 model = Item
 
             @pre_load
-            def uppercase_name(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def uppercase_name(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 data["name"] = data["name"].upper()
                 return data
 
@@ -394,7 +394,7 @@ class TestHooksWithMany:
                 model = User
 
             @post_dump
-            def add_self_link(self, data: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            def add_self_link(self, data: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
                 data["_self"] = f"/users/{data['id']}"
                 return data
 

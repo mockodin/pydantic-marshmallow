@@ -4,7 +4,6 @@ Tests for Flask-Marshmallow integration.
 Verifies that PydanticSchema works correctly with Flask-Marshmallow
 in typical Flask application patterns.
 """
-from typing import List, Optional
 
 import pytest
 from marshmallow import Schema
@@ -31,10 +30,10 @@ pytestmark = pytest.mark.skipif(
 class UserPydantic(BaseModel):
     """User model with validation."""
 
-    id: Optional[int] = None
+    id: int | None = None
     name: str = Field(min_length=1, max_length=100)
     email: str = Field(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
-    age: Optional[int] = Field(default=None, ge=0, le=150)
+    age: int | None = Field(default=None, ge=0, le=150)
 
     @field_validator("name")
     @classmethod
@@ -50,7 +49,7 @@ class AddressPydantic(BaseModel):
     street: str
     city: str
     country: str = "USA"
-    zip_code: Optional[str] = None
+    zip_code: str | None = None
 
 
 class UserWithAddressPydantic(BaseModel):
@@ -64,11 +63,11 @@ class UserWithAddressPydantic(BaseModel):
 class ProductPydantic(BaseModel):
     """Product model for API testing."""
 
-    id: Optional[int] = None
+    id: int | None = None
     name: str = Field(min_length=1)
     price: float = Field(gt=0)
-    description: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 @pytest.fixture

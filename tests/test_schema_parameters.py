@@ -14,7 +14,7 @@ Also tests:
 - extra='allow'/'ignore' ConfigDict options
 """
 
-from typing import List, Literal
+from typing import Literal
 
 import pytest
 from marshmallow.exceptions import ValidationError
@@ -53,7 +53,7 @@ class Item(BaseModel):
 
 class Order(BaseModel):
     customer: str
-    items: List[Item]
+    items: list[Item]
 
 
 class ModelWithConstant(BaseModel):

@@ -7,7 +7,7 @@ maintains compatibility as both libraries evolve.
 Run with: pytest tests/test_compatibility.py -v
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import pytest
 from marshmallow import ValidationError, post_load, pre_load
@@ -71,7 +71,7 @@ class TestMarshmallow318Baseline:
                 model = User
 
             @pre_load
-            def uppercase_name(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def uppercase_name(self, data: dict[str, Any], **kwargs) -> dict[str, Any]:
                 data["name"] = data["name"].upper()
                 return data
 
@@ -166,7 +166,7 @@ class TestPydantic20Baseline:
         """Test Optional[T] fields."""
         class User(BaseModel):
             name: str
-            nickname: Optional[str] = None
+            nickname: str | None = None
 
         schema = schema_for(User)()
 

@@ -1,7 +1,5 @@
 """Tests for the Pydantic-Marshmallow bridge."""
 
-from typing import List, Optional
-
 import pytest
 from marshmallow import ValidationError
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -111,7 +109,7 @@ class TestPydanticSchemaAdvanced:
         """Test Optional fields work correctly."""
         class Profile(BaseModel):
             name: str
-            bio: Optional[str] = None
+            bio: str | None = None
 
         ProfileSchema = schema_for(Profile)
         schema = ProfileSchema()
@@ -129,7 +127,7 @@ class TestPydanticSchemaAdvanced:
         """Test List fields work correctly."""
         class Team(BaseModel):
             name: str
-            members: List[str]
+            members: list[str]
 
         TeamSchema = schema_for(Team)
         schema = TeamSchema()

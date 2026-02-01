@@ -8,8 +8,6 @@ Features tested:
 - Error format compatibility with Marshmallow ecosystem
 """
 
-from typing import List
-
 import pytest
 from marshmallow.exceptions import ValidationError
 from pydantic import BaseModel, Field
@@ -37,7 +35,7 @@ class Item(BaseModel):
 
 class Order(BaseModel):
     customer: str
-    items: List[Item]
+    items: list[Item]
 
 
 class Product(BaseModel):

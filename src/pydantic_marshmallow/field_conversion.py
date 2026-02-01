@@ -7,7 +7,8 @@ eliminating duplication between the metaclass, instance setup, and factory metho
 
 from __future__ import annotations
 
-from typing import Any, get_args, get_origin
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
 
 from marshmallow import fields as ma_fields
 from pydantic import BaseModel
@@ -56,9 +57,11 @@ def convert_pydantic_field(
     if field_info.alias:
         ma_field.data_key = field_info.alias
 
-    # Handle Optional types → allow_none
+    # Handle Optional types (X | None or Optional[X]) → allow_none
     origin = get_origin(annotation)
-    if origin is type(None) or (origin and type(None) in get_args(annotation)):
+    args = get_args(annotation)
+    is_union = origin is Union or origin is UnionType
+    if origin is type(None) or (is_union and type(None) in args):
         ma_field.allow_none = True
 
     return ma_field

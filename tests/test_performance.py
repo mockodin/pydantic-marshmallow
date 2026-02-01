@@ -10,7 +10,6 @@ Or without pytest-benchmark: pytest tests/test_performance.py -v
 import time
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
 
 # Try to import pytest-benchmark, but make tests work without it
 try:
@@ -50,8 +49,8 @@ class ComplexUserPydantic(BaseModel):
     email: EmailStr
     age: int = Field(ge=0)
     balance: Decimal = Field(decimal_places=2)
-    tags: List[str] = Field(default_factory=list)
-    metadata: Optional[dict] = None
+    tags: list[str] = Field(default_factory=list)
+    metadata: dict | None = None
     created_at: datetime
 
 

@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Bring Pydantic's power to Marshmallow: type annotations, validators, and automatic schema generation"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "Your Name", email = "your.email@example.com"}
 ]
@@ -19,7 +19,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -29,10 +28,10 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "marshmallow>=3.20.0",
-    "pydantic>=2.5.0",
-    "typing-extensions>=4.8.0",
-    "orjson>=3.10.0",  # Rust-based JSON - auto-detected by Pydantic for 2-10x faster JSON
+    "marshmallow>=3.18.0",
+    "pydantic>=2.0.0",
+    "typing-extensions>=4.0.0",
+    "orjson>=3.9.0",  # Rust-based JSON - auto-detected by Pydantic for 2-10x faster JSON
 ]
 
 [project.optional-dependencies]
@@ -87,7 +86,7 @@ addopts = "-v --tb=short"
 # MYPY CONFIGURATION (Static Type Checker)
 # =============================================================================
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 # Strict mode settings
 strict = true
 warn_return_any = true
@@ -149,7 +148,7 @@ disallow_incomplete_defs = false
 # =============================================================================
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 exclude = [
     ".git",
     ".mypy_cache",
@@ -209,9 +208,6 @@ unfixable = [
     "D",       # Don't require docstrings in tests
     "RUF012",  # Mutable class attrs OK in tests (e.g., OneOfSchema.type_schemas)
     "N806",    # Variable names like UserSchema in functions are intentional
-    "UP006",   # Use List[x] for compatibility with older python in tests
-    "UP035",   # typing.List etc still valid
-    "UP045",   # Optional[X] is fine for readability
     "SIM118",  # .keys() is fine for clarity
     "SIM105",  # try-except-pass patterns OK in tests
     "B011",    # assert False is intentional in tests

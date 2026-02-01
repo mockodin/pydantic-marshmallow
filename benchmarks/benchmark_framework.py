@@ -23,18 +23,17 @@ Usage:
 
 from __future__ import annotations
 
-import functools
 import gc
-import hashlib
 import json
 import platform
 import statistics
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 F = TypeVar("F", bound=Callable[..., Any])
 

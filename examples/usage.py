@@ -5,10 +5,9 @@ This example shows how to use Pydantic models with Marshmallow's ecosystem.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from marshmallow import ValidationError
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from pydantic_marshmallow import HybridModel, schema_for
 
@@ -128,7 +127,7 @@ class Address(BaseModel):
 class Company(BaseModel):
     name: str
     headquarters: Address
-    offices: List[Address] = []
+    offices: list[Address] = []
 
 schema = schema_for(Company)()
 
@@ -163,7 +162,7 @@ class Order(HybridModel):
     order_id: str
     customer: str
     total: float = Field(ge=0)
-    items: List[str] = []
+    items: list[str] = Field(default_factory=list)
 
 # Use as a Pydantic model
 order = Order(

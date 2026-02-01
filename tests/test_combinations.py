@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 import pytest
@@ -105,11 +105,11 @@ class Task(BaseModel):
     """Task with enum fields and model validator."""
 
     title: str = Field(min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     status: Status = Status.DRAFT
     priority: Priority = Priority.MEDIUM
-    assignee: Optional[Person] = None
-    due_date: Optional[date] = None
+    assignee: Person | None = None
+    due_date: date | None = None
 
     @model_validator(mode="after")
     def validate_assignment(self) -> Task:
@@ -124,7 +124,7 @@ class Project(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     name: str = Field(min_length=1)
     description: str = ""
-    tasks: List[Task] = Field(default_factory=list)
+    tasks: list[Task] = Field(default_factory=list)
     budget: Decimal = Field(decimal_places=2, default=Decimal("0.00"))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -144,7 +144,7 @@ class TreeNode(BaseModel):
 
     value: int
     label: str = ""
-    children: List[TreeNode] = Field(default_factory=list)
+    children: list[TreeNode] = Field(default_factory=list)
 
     @field_validator("value")
     @classmethod
@@ -189,14 +189,14 @@ class Triangle(ShapeBase):
 
 
 
-Shape = Annotated[Union[Circle, Rectangle, Triangle], Field(discriminator="shape_type")]
+Shape = Annotated[Circle | Rectangle | Triangle, Field(discriminator="shape_type")]
 
 
 class Drawing(BaseModel):
     """Container with discriminated union."""
 
     name: str
-    shapes: List[Shape] = Field(default_factory=list)
+    shapes: list[Shape] = Field(default_factory=list)
 
 
 # Alias models
@@ -230,7 +230,7 @@ class ProjectSchema(PydanticSchema[Project]):
         model = Project
 
     @pre_load
-    def pre_process(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def pre_process(self, data: dict[str, Any], **kwargs) -> dict[str, Any]:
         # Convert string UUID if provided
         if "id" in data and isinstance(data["id"], str):
             data["id"] = data["id"]  # Pydantic will handle conversion
@@ -251,7 +251,7 @@ class ProjectSchema(PydanticSchema[Project]):
             raise ValidationError(f"'{value}' is a reserved project name")
 
     @validates_schema
-    def validate_budget(self, data: Dict[str, Any], **kwargs) -> None:
+    def validate_budget(self, data: dict[str, Any], **kwargs) -> None:
         # Only applies when return_instance=False
         pass
 
@@ -263,7 +263,7 @@ class PersonSchema(PydanticSchema[Person]):
         model = Person
 
     @pre_load
-    def normalize_names(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def normalize_names(self, data: dict[str, Any], **kwargs) -> dict[str, Any]:
         if "first_name" in data:
             data["first_name"] = data["first_name"].strip().title()
         if "last_name" in data:
@@ -271,7 +271,7 @@ class PersonSchema(PydanticSchema[Person]):
         return data
 
     @post_dump
-    def add_metadata(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def add_metadata(self, data: dict[str, Any], **kwargs) -> dict[str, Any]:
         data["_serialized_at"] = datetime.utcnow().isoformat()
         return data
 
@@ -815,7 +815,7 @@ class TestSelfReferentialWithValidators:
         schema = schema_for(TreeNode)()
 
         # Build 10-level deep tree
-        def build_tree(depth: int, value: int = 0) -> Dict[str, Any]:
+        def build_tree(depth: int, value: int = 0) -> dict[str, Any]:
             if depth == 0:
                 return {"value": value}
             return {
@@ -919,7 +919,7 @@ class TestContextPassingCombinations:
                 model = Task
 
             @pre_load
-            def apply_defaults(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+            def apply_defaults(self, data: dict[str, Any], **kwargs) -> dict[str, Any]:
                 default_priority = self.context.get("default_priority")
                 if default_priority and "priority" not in data:
                     data["priority"] = default_priority

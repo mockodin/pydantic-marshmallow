@@ -7,7 +7,6 @@ for OpenAPI specification generation.
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import List, Optional
 
 import pytest
 from marshmallow import Schema
@@ -41,12 +40,12 @@ class UserStatus(str, Enum):
 class UserPydantic(BaseModel):
     """User model with various field types."""
 
-    id: Optional[int] = Field(default=None, description="User ID")
+    id: int | None = Field(default=None, description="User ID")
     name: str = Field(min_length=1, max_length=100, description="User's full name")
     email: str = Field(description="User's email address")
-    age: Optional[int] = Field(default=None, ge=0, le=150, description="User's age")
+    age: int | None = Field(default=None, ge=0, le=150, description="User's age")
     status: UserStatus = Field(default=UserStatus.ACTIVE, description="Account status")
-    created_at: Optional[datetime] = Field(
+    created_at: datetime | None = Field(
         default=None, description="Account creation timestamp"
     )
 
@@ -57,7 +56,7 @@ class AddressPydantic(BaseModel):
     street: str = Field(description="Street address")
     city: str = Field(description="City name")
     country: str = Field(default="USA", description="Country code")
-    zip_code: Optional[str] = Field(default=None, description="Postal code")
+    zip_code: str | None = Field(default=None, description="Postal code")
 
 
 class UserWithAddressPydantic(BaseModel):
@@ -71,11 +70,11 @@ class UserWithAddressPydantic(BaseModel):
 class ProductPydantic(BaseModel):
     """Product model with various constraints."""
 
-    id: Optional[int] = Field(default=None, description="Product ID")
+    id: int | None = Field(default=None, description="Product ID")
     name: str = Field(min_length=1, max_length=200, description="Product name")
-    description: Optional[str] = Field(default=None, description="Product description")
+    description: str | None = Field(default=None, description="Product description")
     price: Decimal = Field(gt=0, decimal_places=2, description="Product price")
-    tags: List[str] = Field(default_factory=list, description="Product tags")
+    tags: list[str] = Field(default_factory=list, description="Product tags")
     in_stock: bool = Field(default=True, description="Availability status")
 
 
@@ -90,11 +89,11 @@ class OrderItemPydantic(BaseModel):
 class OrderPydantic(BaseModel):
     """Order with nested items."""
 
-    id: Optional[int] = Field(default=None, description="Order ID")
+    id: int | None = Field(default=None, description="Order ID")
     customer_name: str = Field(description="Customer name")
-    items: List[OrderItemPydantic] = Field(description="Order line items")
+    items: list[OrderItemPydantic] = Field(description="Order line items")
     total: Decimal = Field(ge=0, description="Order total")
-    notes: Optional[str] = Field(default=None, description="Order notes")
+    notes: str | None = Field(default=None, description="Order notes")
 
 
 @pytest.fixture
@@ -510,8 +509,8 @@ class TestEdgeCases:
         """Schema with only optional fields works."""
 
         class AllOptionalModel(BaseModel):
-            field1: Optional[str] = None
-            field2: Optional[int] = None
+            field1: str | None = None
+            field2: int | None = None
 
         AllOptionalSchema = schema_for(AllOptionalModel)
         spec.components.schema("AllOptional", schema=AllOptionalSchema)

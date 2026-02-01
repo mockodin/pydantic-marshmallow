@@ -8,8 +8,6 @@ Consolidated tests for:
 Uses parameterization for comprehensive constraint coverage.
 """
 
-from typing import List, Optional
-
 import pytest
 from marshmallow.exceptions import ValidationError
 from pydantic import BaseModel, Field
@@ -339,7 +337,7 @@ class TestCollectionConstraints:
             field_kwargs["max_length"] = max_items
 
         class Model(BaseModel):
-            items: List[str] = Field(**field_kwargs) if field_kwargs else Field()
+            items: list[str] = Field(**field_kwargs) if field_kwargs else Field()
 
         schema = schema_for(Model)()
 
@@ -370,7 +368,7 @@ class TestEmptyAndNoneValues:
     def test_optional_string_values(self, value, expected):
         """Test Optional[str] accepts empty/None values."""
         class Model(BaseModel):
-            value: Optional[str] = None
+            value: str | None = None
 
         schema = schema_for(Model)()
         result = schema.load({"value": value})
@@ -379,11 +377,11 @@ class TestEmptyAndNoneValues:
     @pytest.mark.parametrize(
         "field_type,empty_value,should_pass",
         [
-            (List[str], [], True),
+            (list[str], [], True),
             (dict, {}, True),
             (str, "", True),
-            (Optional[str], None, True),
-            (Optional[int], None, True),
+            (str | None, None, True),
+            (int | None, None, True),
         ],
         ids=["empty_list", "empty_dict", "empty_string", "none_string", "none_int"],
     )
@@ -426,7 +424,7 @@ class TestMultipleErrorsAccumulation:
 
         class Order(BaseModel):
             customer: str
-            items: List[Item]
+            items: list[Item]
 
         schema = schema_for(Order)()
 

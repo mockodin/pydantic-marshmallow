@@ -19,7 +19,7 @@ have been moved to dedicated test files:
 from datetime import date, timedelta
 from enum import IntEnum
 from pathlib import Path
-from typing import Annotated, Dict, Generic, List, Literal, TypeVar, Union
+from typing import Annotated, Generic, Literal, TypeVar
 
 import pytest
 from marshmallow import EXCLUDE, INCLUDE, ValidationError, pre_load, validates, validates_schema
@@ -323,7 +323,7 @@ class TestContextPassing:
     def test_context_in_validates_schema(self):
         """Test context is available in @validates_schema methods."""
         class Order(BaseModel):
-            items: List[str]
+            items: list[str]
             total: float
 
         class OrderSchema(PydanticSchema[Order]):
@@ -427,7 +427,7 @@ class TestComplexValidation:
             bark_volume: int
 
         class Pet(BaseModel):
-            pet: Union[Cat, Dog] = Field(discriminator="pet_type")
+            pet: Cat | Dog = Field(discriminator="pet_type")
 
         schema = schema_for(Pet)()
 
@@ -443,7 +443,7 @@ class TestComplexValidation:
         """Test deeply recursive models."""
         class Node(BaseModel):
             value: int
-            children: List["Node"] = []
+            children: list["Node"] = []
 
         Node.model_rebuild()
 
@@ -473,7 +473,7 @@ class TestComplexValidation:
             status: str = "ok"
 
         # Concrete instantiation
-        class UserResponse(Response[Dict[str, str]]):
+        class UserResponse(Response[dict[str, str]]):
             pass
 
         schema = schema_for(UserResponse)()

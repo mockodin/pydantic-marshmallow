@@ -13,7 +13,6 @@ Covers additional scenarios:
 """
 
 import time
-from typing import List
 
 from marshmallow import Schema, fields as ma_fields, post_load, pre_load, validate, validates
 from pydantic import BaseModel, computed_field, field_validator
@@ -92,12 +91,12 @@ class DeeplyNestedLevel3(BaseModel):
 
 class DeeplyNestedLevel2(BaseModel):
     name: str
-    items: List[DeeplyNestedLevel3]
+    items: list[DeeplyNestedLevel3]
 
 
 class DeeplyNestedLevel1(BaseModel):
     title: str
-    sections: List[DeeplyNestedLevel2]
+    sections: list[DeeplyNestedLevel2]
 
 
 class DeeplyNestedRoot(BaseModel):

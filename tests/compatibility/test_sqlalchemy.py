@@ -4,7 +4,6 @@ Tests for marshmallow-sqlalchemy integration.
 Verifies that PydanticSchema works correctly alongside marshmallow-sqlalchemy
 and in typical SQLAlchemy application patterns.
 """
-from typing import Optional
 
 import pytest
 from marshmallow import Schema
@@ -56,16 +55,16 @@ if SQLALCHEMY_AVAILABLE:
 
 # Pydantic models (for comparison/parallel use)
 class AuthorPydantic(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     name: str = Field(min_length=1)
-    email: Optional[str] = None
+    email: str | None = None
 
 
 class BookPydantic(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     title: str = Field(min_length=1)
     price: float = Field(ge=0, default=0.0)
-    author_id: Optional[int] = None
+    author_id: int | None = None
 
 
 @pytest.fixture

@@ -4,7 +4,6 @@ Tests for webargs integration.
 Verifies that PydanticSchema works correctly with webargs
 for request parsing and validation.
 """
-from typing import List, Optional
 
 import pytest
 from marshmallow import Schema
@@ -34,7 +33,7 @@ class SearchQuery(BaseModel):
     query: str = Field(min_length=1, max_length=200)
     limit: int = Field(default=10, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
 
 class UserCreate(BaseModel):
@@ -43,7 +42,7 @@ class UserCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     email: str = Field(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
     password: str = Field(min_length=8)
-    age: Optional[int] = Field(default=None, ge=13, le=150)
+    age: int | None = Field(default=None, ge=13, le=150)
 
     @field_validator("password")
     @classmethod
@@ -56,15 +55,15 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """User update schema (all fields optional)."""
 
-    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    email: Optional[str] = Field(default=None, pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
-    age: Optional[int] = Field(default=None, ge=13, le=150)
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    email: str | None = Field(default=None, pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
+    age: int | None = Field(default=None, ge=13, le=150)
 
 
 class FilterParams(BaseModel):
     """Filter parameters for list endpoints."""
 
-    status: Optional[str] = Field(default=None, pattern=r"^(active|inactive|pending)$")
+    status: str | None = Field(default=None, pattern=r"^(active|inactive|pending)$")
     sort_by: str = Field(default="created_at")
     order: str = Field(default="desc", pattern=r"^(asc|desc)$")
     page: int = Field(default=1, ge=1)
@@ -77,7 +76,7 @@ class ItemCreate(BaseModel):
     name: str = Field(min_length=1)
     price: float = Field(gt=0)
     quantity: int = Field(ge=0, default=0)
-    metadata: Optional[dict] = None
+    metadata: dict | None = None
 
 
 @pytest.fixture
