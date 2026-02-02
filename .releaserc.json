@@ -32,6 +32,14 @@
         ]
       }
     }],
+    ["@semantic-release/changelog", {
+      "changelogFile": "docs/changelog.md",
+      "changelogTitle": "# Changelog\n\nAll notable changes to pydantic-marshmallow will be documented here."
+    }],
+    ["@semantic-release/git", {
+      "assets": ["docs/changelog.md"],
+      "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+    }],
     "@semantic-release/github"
   ]
 }
