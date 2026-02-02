@@ -577,7 +577,7 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         # Step 1: Run pre_load hooks ONLY if they exist (PERFORMANCE OPTIMIZATION)
         # Skipping _invoke_load_processors when empty saves ~5ms per 10k loads
         if self._hooks.get("pre_load"):
-            processed_data = self._invoke_load_processors(
+            processed_data_raw = self._invoke_load_processors(
                 "pre_load",
                 data,
                 many=False,
@@ -585,7 +585,10 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                 partial=partial,
             )
         else:
-            processed_data = data
+            processed_data_raw = data
+
+        # Type narrowing: at this point (many=False path), data is always a dict
+        processed_data: dict[str, Any] = cast(dict[str, Any], processed_data_raw)
 
         # Step 2: Handle unknown fields based on setting
         if self._model_class:
@@ -610,7 +613,8 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
 
         # Step 3: Pydantic validates the transformed data
         # Returns (validated_dict, instance) - instance reused to avoid double validation
-        pydantic_instance = None
+        pydantic_instance: M | None = None
+        validated_data: dict[str, Any]
         if self._model_class:
             try:
                 validated_data, pydantic_instance = self._validate_with_pydantic(
@@ -989,7 +993,7 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
             obj = obj.model_dump(by_alias=False)
 
         # Let Marshmallow handle the standard dump
-        result: dict[str, Any] = super().dump(obj, many=False)
+        result: dict[str, Any] = cast(dict[str, Any], super().dump(obj, many=False))
 
         # Apply field exclusions
         if fields_to_exclude:

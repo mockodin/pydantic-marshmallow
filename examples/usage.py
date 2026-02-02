@@ -19,11 +19,13 @@ print("=" * 60)
 print("Example 1: Basic Usage")
 print("=" * 60)
 
+
 class User(BaseModel):
     """A user model with Pydantic validation."""
     name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     age: int = Field(ge=0, le=150)
+
 
 # Create a Marshmallow schema from the Pydantic model
 UserSchema = schema_for(User)
@@ -50,6 +52,7 @@ print("=" * 60)
 print("Example 2: Pydantic Validation")
 print("=" * 60)
 
+
 class Product(BaseModel):
     """Product with custom validator."""
     name: str = Field(min_length=1)
@@ -62,6 +65,7 @@ class Product(BaseModel):
         if not v.upper().startswith("SKU-"):
             raise ValueError("SKU must start with 'SKU-'")
         return v.upper()
+
 
 ProductSchema = schema_for(Product)
 schema = ProductSchema()
@@ -90,11 +94,13 @@ print("=" * 60)
 print("Example 3: Type Coercion")
 print("=" * 60)
 
+
 class Config(BaseModel):
     """Config with type coercion."""
     count: int
     enabled: bool
     threshold: float
+
 
 schema = schema_for(Config)()
 
@@ -119,15 +125,18 @@ print("=" * 60)
 print("Example 4: Nested Models")
 print("=" * 60)
 
+
 class Address(BaseModel):
     street: str
     city: str
     country: str = "USA"
 
+
 class Company(BaseModel):
     name: str
     headquarters: Address
     offices: list[Address] = []
+
 
 schema = schema_for(Company)()
 
@@ -157,12 +166,14 @@ print("=" * 60)
 print("Example 5: HybridModel")
 print("=" * 60)
 
+
 class Order(HybridModel):
     """Order model that works as both Pydantic and Marshmallow."""
     order_id: str
     customer: str
     total: float = Field(ge=0)
     items: list[str] = Field(default_factory=list)
+
 
 # Use as a Pydantic model
 order = Order(
@@ -201,10 +212,12 @@ print("=" * 60)
 print("Example 6: JSON Serialization")
 print("=" * 60)
 
+
 class Event(BaseModel):
     name: str
     date: datetime
     attendees: int = 0
+
 
 schema = schema_for(Event)()
 
@@ -226,9 +239,11 @@ print("=" * 60)
 print("Example 7: Batch Loading")
 print("=" * 60)
 
+
 class Task(BaseModel):
     title: str
     done: bool = False
+
 
 schema = schema_for(Task)(many=True)
 

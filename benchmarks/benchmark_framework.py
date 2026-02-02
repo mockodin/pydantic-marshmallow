@@ -362,7 +362,7 @@ class BenchmarkSuite:
         """
         results: dict[str, BenchmarkResult] = {}
 
-        benchmarks = self._benchmarks.items()
+        benchmarks = list(self._benchmarks.items())
         if filter_pattern:
             benchmarks = [(n, b) for n, b in benchmarks if filter_pattern in n]
 
