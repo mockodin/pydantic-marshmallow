@@ -1,0 +1,31 @@
+# Codecov configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  status:
+    # Overall project coverage
+    project:
+      default:
+        target: 80%      # Minimum overall coverage
+        threshold: 2%    # Allow up to 2% drop from base
+        
+    # Coverage for changed lines only (enforces new code coverage)
+    patch:
+      default:
+        target: 90%      # New/changed code must have 90% coverage
+        
+  # Don't wait for all CI jobs
+  precision: 2
+  round: down
+  
+# Ignore test files and benchmarks from coverage
+ignore:
+  - "tests/**/*"
+  - "benchmarks/**/*"
+  - "docs/**/*"
+  
+# Comment on PRs with coverage report
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true

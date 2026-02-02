@@ -88,6 +88,37 @@ testpaths = ["tests"]
 addopts = "-v --tb=short"
 
 # =============================================================================
+# COVERAGE CONFIGURATION
+# =============================================================================
+[tool.coverage.run]
+source = ["src/pydantic_marshmallow"]
+branch = true
+omit = ["*/tests/*", "*/benchmarks/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@overload",
+]
+fail_under = 75
+show_missing = true
+precision = 2
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+# =============================================================================
+# DIFF-COVER CONFIGURATION (changed code coverage)
+# =============================================================================
+[tool.diff_cover]
+compare_branch = "origin/main"
+fail_under = 80
+
+# =============================================================================
 # MYPY CONFIGURATION (Static Type Checker)
 # =============================================================================
 [tool.mypy]
@@ -259,4 +290,9 @@ exclude = [
     "build",
     "dist",
     "*.egg-info",
+]
+
+[dependency-groups]
+dev = [
+    "diff-cover>=10.2.0",
 ]
