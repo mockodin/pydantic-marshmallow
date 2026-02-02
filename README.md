@@ -19,10 +19,10 @@ pydantic-marshmallow uses Pydantic's Rust-powered validation engine under the ho
 
 | Operation | pydantic-marshmallow | Marshmallow | Speedup |
 |-----------|---------------------|-------------|---------|
-| Simple load | 4.8 µs | 5.3 µs | **1.1x faster** |
-| Nested model | 5.9 µs | 12.0 µs | **2x faster** |
-| Deep nested (4 levels) | 9.2 µs | 34.1 µs | **3.7x faster** |
-| Batch (100 items) | 450 µs | 490 µs | **1.1x faster** |
+| Simple load | 3.0 µs | 5.3 µs | **1.8x faster** |
+| Nested model | 3.5 µs | 11.6 µs | **3.3x faster** |
+| Deep nested (4 levels) | 5.6 µs | 32.3 µs | **5.8x faster** |
+| Batch (100 items) | 255 µs | 474 µs | **1.9x faster** |
 
 *Benchmarks run on Python 3.11. Run `python -m benchmarks.run_benchmarks` to reproduce.*
 
@@ -30,7 +30,7 @@ pydantic-marshmallow uses Pydantic's Rust-powered validation engine under the ho
 
 - **Existing Marshmallow projects**: Incrementally adopt Pydantic validation without rewriting your API layer
 - **Flask/webargs/apispec users**: Keep your integrations, get faster validation
-- **Performance-sensitive APIs**: Nested model validation is 2-4x faster than native Marshmallow
+- **Performance-sensitive APIs**: Nested model validation is 3-6x faster than native Marshmallow
 
 ## Features
 

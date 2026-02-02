@@ -7,17 +7,23 @@ Flow: Input → Marshmallow pre_load → PYDANTIC VALIDATES → Marshmallow post
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence, Set as AbstractSet
+from collections.abc import Callable, Sequence
+from collections.abc import Set as AbstractSet
 from typing import Any, ClassVar, Generic, TypeVar, cast, get_args, get_origin
 
-from marshmallow import EXCLUDE, INCLUDE, RAISE, Schema, fields as ma_fields
+from marshmallow import EXCLUDE, INCLUDE, RAISE, Schema
+from marshmallow import fields as ma_fields
 from marshmallow.decorators import VALIDATES, VALIDATES_SCHEMA
 from marshmallow.error_store import ErrorStore
-from marshmallow.exceptions import ValidationError as MarshmallowValidationError
+from marshmallow.exceptions import \
+    ValidationError as MarshmallowValidationError
 from marshmallow.schema import SchemaMeta
-from pydantic import BaseModel, ConfigDict, ValidationError as PydanticValidationError
+from marshmallow.utils import missing as ma_missing
+from pydantic import BaseModel, ConfigDict
+from pydantic import ValidationError as PydanticValidationError
 
-from .errors import BridgeValidationError, convert_pydantic_errors, format_pydantic_error
+from .errors import (BridgeValidationError, convert_pydantic_errors,
+                     format_pydantic_error)
 from .field_conversion import convert_model_fields, convert_pydantic_field
 from .validators import cache_validators
 
@@ -26,9 +32,38 @@ M = TypeVar("M", bound=BaseModel)
 # Module-level cache for HybridModel schemas
 _hybrid_schema_cache: dict[type[Any], type[PydanticSchema[Any]]] = {}
 
+# Cache for schema_for/from_model - key is (model, frozen options)
+# This avoids recreating schema classes for the same model+options
+_schema_class_cache: dict[tuple[type[Any], tuple[tuple[str, Any], ...]], type[Any]] = {}
+
 # Field validator registry: maps (schema_class, field_name) -> list of validator functions
 _field_validators: dict[tuple[type[Any], str], list[Callable[..., Any]]] = {}
 _schema_validators: dict[type[Any], list[Callable[..., Any]]] = {}
+
+# PERFORMANCE: Cache model field names (with aliases) per model class
+# This avoids repeated set() construction and iteration in the hot path
+_model_field_names_cache: dict[type[BaseModel], frozenset[str]] = {}
+
+
+def _get_model_field_names_with_aliases(model_class: type[BaseModel]) -> frozenset[str]:
+    """
+    Get cached frozenset of model field names including aliases.
+
+    This caches the result per model class to avoid repeated computation
+    in the load() hot path.
+    """
+    cached = _model_field_names_cache.get(model_class)
+    if cached is not None:
+        return cached
+
+    field_names = set(model_class.model_fields.keys())
+    for field_info in model_class.model_fields.values():
+        if field_info.alias:
+            field_names.add(field_info.alias)
+
+    result = frozenset(field_names)
+    _model_field_names_cache[model_class] = result
+    return result
 
 
 class PydanticSchemaMeta(SchemaMeta):
@@ -389,12 +424,20 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         data: dict[str, Any],
         partial: bool | Sequence[str] | AbstractSet[str] | None = None,
         original_data: Any | None = None,
+        skip_model_dump: bool = False,
     ) -> tuple[dict[str, Any], M | None]:
         """
         Use Pydantic to validate and coerce the input data.
 
         Filters out marshmallow.missing sentinel values before Pydantic validation,
         allowing Pydantic to use its own defaults for missing fields.
+
+        Args:
+            data: Input data to validate
+            partial: Partial validation mode
+            original_data: Original input data for error reporting
+            skip_model_dump: If True and not partial, skip model_dump() and return
+                           empty dict. Use when validators don't need the dict.
 
         Returns:
             Tuple of (validated_data_dict, model_instance)
@@ -404,8 +447,6 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
             return data, None
 
         # Filter out marshmallow.missing values - Pydantic should use its defaults
-        from marshmallow.utils import missing as ma_missing
-
         clean_data = {
             k: v for k, v in data.items()
             if v is not ma_missing
@@ -420,6 +461,9 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
             else:
                 # Let Pydantic do all the validation - KEEP THE INSTANCE
                 instance = self._model_class.model_validate(clean_data)
+                # OPTIMIZATION: Skip model_dump if not needed for validators
+                if skip_model_dump:
+                    return {}, cast(M, instance)
                 # Return both the dict (for validators) and instance (for result)
                 validated_data = instance.model_dump(by_alias=False)
                 # Cast to M since model_validate returns the correct model type
@@ -545,6 +589,11 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
 
         This ensures 100% Marshmallow hook compatibility.
         """
+        # PERFORMANCE: Hoist frequently accessed attributes to local variables
+        # This avoids repeated self.__dict__ lookups in the hot path
+        model_class = self._model_class
+        hooks = self._hooks
+
         # Resolve settings
         if many is None:
             many = self.many
@@ -576,7 +625,7 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
 
         # Step 1: Run pre_load hooks ONLY if they exist (PERFORMANCE OPTIMIZATION)
         # Skipping _invoke_load_processors when empty saves ~5ms per 10k loads
-        if self._hooks.get("pre_load"):
+        if hooks.get("pre_load"):
             processed_data_raw = self._invoke_load_processors(
                 "pre_load",
                 data,
@@ -591,14 +640,11 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         processed_data: dict[str, Any] = cast(dict[str, Any], processed_data_raw)
 
         # Step 2: Handle unknown fields based on setting
-        if self._model_class:
-            model_fields = set(self._model_class.model_fields.keys())
-            # Also include aliases in known fields
-            for _field_name, field_info in self._model_class.model_fields.items():
-                if field_info.alias:
-                    model_fields.add(field_info.alias)
-
-            unkn_fields = set(processed_data.keys()) - model_fields
+        # PERFORMANCE: Use cached field names instead of computing every time
+        model_field_names: frozenset[str] | None = None
+        if model_class:
+            model_field_names = _get_model_field_names_with_aliases(model_class)
+            unkn_fields = set(processed_data.keys()) - model_field_names
 
             if unkn_fields:
                 if unknown_setting == RAISE:
@@ -607,7 +653,7 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                 if unknown_setting == EXCLUDE:
                     # Remove unknown fields
                     processed_data = {
-                        k: v for k, v in processed_data.items() if k in model_fields
+                        k: v for k, v in processed_data.items() if k in model_field_names
                     }
                 # INCLUDE: keep unknown fields in the result (handled below)
 
@@ -615,10 +661,28 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         # Returns (validated_dict, instance) - instance reused to avoid double validation
         pydantic_instance: M | None = None
         validated_data: dict[str, Any]
-        if self._model_class:
+
+        # OPTIMIZATION: Determine if we need model_dump() for validators/result
+        # Skip expensive model_dump() when not needed
+        has_validators = bool(
+            hooks[VALIDATES] or
+            hooks[VALIDATES_SCHEMA] or
+            self._field_validators_cache or
+            self._schema_validators_cache
+        )
+        needs_dict = (
+            not return_instance or  # Need dict for result
+            unknown_setting == INCLUDE or  # Need dict to merge unknown fields
+            has_validators  # Need dict for validators
+        )
+
+        if model_class:
             try:
                 validated_data, pydantic_instance = self._validate_with_pydantic(
-                    processed_data, partial=partial, original_data=data
+                    processed_data,
+                    partial=partial,
+                    original_data=data,
+                    skip_model_dump=not needs_dict,
                 )
             except MarshmallowValidationError as pydantic_error:
                 # Call handle_error for Pydantic validation errors
@@ -627,8 +691,8 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                 raise
 
             # If INCLUDE, add unknown fields back to validated data
-            if unknown_setting == INCLUDE and self._model_class:
-                for field in (set(processed_data.keys()) - model_fields):
+            if unknown_setting == INCLUDE and model_class:
+                for field in (set(processed_data.keys()) - model_field_names):
                     validated_data[field] = processed_data[field]
         else:
             validated_data = processed_data
@@ -639,8 +703,8 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         error_store_cls: Callable[[], Any] = cast(Callable[[], Any], ErrorStore)
         error_store: Any = error_store_cls()
 
-        # 4a: Run Marshmallow's native @validates decorators (from _hooks)
-        if self._hooks[VALIDATES]:
+        # 4a: Run Marshmallow's native @validates decorators (from hooks)
+        if hooks[VALIDATES]:
             self._invoke_field_validators(
                 error_store=error_store,
                 data=validated_data,
@@ -660,7 +724,7 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
 
         # Step 5: Run schema validators (BOTH Marshmallow native AND our custom)
         # 5a: Run Marshmallow's native @validates_schema decorators
-        if self._hooks[VALIDATES_SCHEMA]:
+        if hooks[VALIDATES_SCHEMA]:
             self._invoke_schema_validators(
                 error_store=error_store,
                 pass_many=True,
@@ -694,7 +758,7 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
             self.handle_error(error, data, many=False)
 
         # Step 6: Prepare result based on return_instance flag
-        if self._model_class and return_instance:
+        if model_class and return_instance:
             if not partial:
                 # OPTIMIZATION: Reuse the instance from _validate_with_pydantic
                 result = pydantic_instance if pydantic_instance is not None else validated_data
@@ -705,7 +769,7 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                 construct_data = {}
                 fields_set = set()
 
-                for field_name, field_info in self._model_class.model_fields.items():
+                for field_name, field_info in model_class.model_fields.items():
                     if field_name in validated_data:
                         construct_data[field_name] = validated_data[field_name]
                         fields_set.add(field_name)
@@ -722,14 +786,14 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                             construct_data[field_name] = None
 
                 result = cast(
-                    M, self._model_class.model_construct(_fields_set=fields_set, **construct_data)
+                    M, model_class.model_construct(_fields_set=fields_set, **construct_data)
                 )
         else:
             # Return dict instead of instance
             result = validated_data
 
         # Step 7: Run post_load hooks ONLY if they exist (PERFORMANCE OPTIMIZATION)
-        if postprocess and self._hooks.get("post_load"):
+        if postprocess and hooks.get("post_load"):
             result = self._invoke_load_processors(
                 "post_load",
                 result,
@@ -1036,6 +1100,16 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         Returns:
             A PydanticSchema subclass
         """
+        # Build cache key from model and options
+        # Sort options to ensure consistent keys
+        try:
+            cache_key = (model, tuple(sorted(meta_options.items())))
+            if cache_key in _schema_class_cache:
+                return _schema_class_cache[cache_key]
+        except TypeError:
+            # Unhashable options (e.g., list values) - skip cache
+            cache_key = None
+
         name = schema_name or f"{model.__name__}Schema"
 
         # Extract field filtering options
@@ -1067,6 +1141,11 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         class_dict: dict[str, Any] = {"Meta": Meta, **fields}
 
         schema_cls = type(name, (cls,), class_dict)
+
+        # Cache the schema class
+        if cache_key is not None:
+            _schema_class_cache[cache_key] = schema_cls
+
         return schema_cls
 
 
