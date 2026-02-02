@@ -7,9 +7,17 @@ in typical Flask application patterns.
 
 import pytest
 from marshmallow import Schema
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
 from pydantic_marshmallow import schema_for
+
+# Import shared models from compatibility conftest
+from .conftest import (
+    AddressPydantic,
+    ProductPydantic,
+    UserPydantic,
+    UserWithAddressPydantic,
+)
 
 # Third-party imports with conditional availability
 try:
@@ -24,50 +32,6 @@ pytestmark = pytest.mark.skipif(
     not FLASK_MARSHMALLOW_AVAILABLE,
     reason="flask and flask-marshmallow not installed"
 )
-
-
-# Pydantic models for testing
-class UserPydantic(BaseModel):
-    """User model with validation."""
-
-    id: int | None = None
-    name: str = Field(min_length=1, max_length=100)
-    email: str = Field(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
-    age: int | None = Field(default=None, ge=0, le=150)
-
-    @field_validator("name")
-    @classmethod
-    def name_must_not_be_empty(cls, v: str) -> str:
-        if v.strip() == "":
-            raise ValueError("Name cannot be blank")
-        return v.strip()
-
-
-class AddressPydantic(BaseModel):
-    """Address model."""
-
-    street: str
-    city: str
-    country: str = "USA"
-    zip_code: str | None = None
-
-
-class UserWithAddressPydantic(BaseModel):
-    """User with nested address."""
-
-    name: str
-    email: str
-    address: AddressPydantic
-
-
-class ProductPydantic(BaseModel):
-    """Product model for API testing."""
-
-    id: int | None = None
-    name: str = Field(min_length=1)
-    price: float = Field(gt=0)
-    description: str | None = None
-    tags: list[str] = Field(default_factory=list)
 
 
 @pytest.fixture

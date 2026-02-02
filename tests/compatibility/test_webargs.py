@@ -79,18 +79,7 @@ class ItemCreate(BaseModel):
     metadata: dict | None = None
 
 
-@pytest.fixture
-def app():
-    """Create a Flask application for testing."""
-    app = Flask(__name__)
-    app.config["TESTING"] = True
-    return app
-
-
-@pytest.fixture
-def client(app):
-    """Create a test client."""
-    return app.test_client()
+# Flask fixtures (app, client) provided by conftest.py
 
 
 class TestWebargsBaseline:

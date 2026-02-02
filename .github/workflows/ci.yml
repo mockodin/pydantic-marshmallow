@@ -35,7 +35,7 @@ jobs:
         run: uv run mypy src/pydantic_marshmallow/
 
   test:
-    name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    name: Test (Py${{ matrix.python-version }}, ${{ matrix.os }}, MA${{ matrix.marshmallow-version }}, PD${{ matrix.pydantic-version }})
     needs: [lint]  # Only run tests after lint passes
     runs-on: ${{ matrix.os }}
     strategy:
@@ -43,6 +43,48 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        marshmallow-version: ['latest']  # Default to latest Marshmallow (3.x from lock)
+        pydantic-version: ['latest']  # Default to latest Pydantic
+        include:
+          # === BASE VERSIONS (minimum supported) ===
+          # Marshmallow 3.18.0 + Pydantic 2.0.0 - minimum supported combo
+          - os: ubuntu-latest
+            python-version: '3.10'
+            marshmallow-version: '3.18.0'
+            pydantic-version: '2.0.0'
+          # Pydantic 2.0.0 with latest Marshmallow 3.x
+          - os: ubuntu-latest
+            python-version: '3.11'
+            marshmallow-version: 'latest'
+            pydantic-version: '2.0.0'
+
+          # === INTERMEDIATE VERSIONS ===
+          # Marshmallow 3.21.0 (last 3.x before 4.0) + Pydantic 2.5.x
+          - os: ubuntu-latest
+            python-version: '3.11'
+            marshmallow-version: '3.21.0'
+            pydantic-version: '2.5'
+          # Pydantic 2.5 (significant validation changes) with latest Marshmallow
+          - os: ubuntu-latest
+            python-version: '3.12'
+            marshmallow-version: 'latest'
+            pydantic-version: '2.5'
+
+          # === LATEST/BLEEDING EDGE ===
+          # Marshmallow 4.x latest on Ubuntu with Python 3.11 and 3.12
+          - os: ubuntu-latest
+            python-version: '3.11'
+            marshmallow-version: '4-latest'
+            pydantic-version: 'latest'
+          - os: ubuntu-latest
+            python-version: '3.12'
+            marshmallow-version: '4-latest'
+            pydantic-version: 'latest'
+          # Marshmallow 4.x + Pydantic 2.5 cross-version
+          - os: ubuntu-latest
+            python-version: '3.11'
+            marshmallow-version: '4-latest'
+            pydantic-version: '2.5'
         exclude:
           # Reduce matrix size - test all Python versions on Ubuntu, latest on others
           - os: windows-latest
@@ -70,15 +112,67 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Override Marshmallow to 4.x latest
+        if: matrix.marshmallow-version == '4-latest'
+        run: uv pip install --upgrade "marshmallow>=4.0.0"
+
+      - name: Override Marshmallow to specific version
+        if: matrix.marshmallow-version != 'latest' && matrix.marshmallow-version != '4-latest'
+        run: uv pip install "marshmallow==${{ matrix.marshmallow-version }}"
+
+      - name: Override Pydantic to 2.5.x
+        if: matrix.pydantic-version == '2.5'
+        run: uv pip install "pydantic>=2.5.0,<2.6.0"
+
+      - name: Override Pydantic to specific version
+        if: matrix.pydantic-version == '2.0.0'
+        run: uv pip install "pydantic>=2.0.0,<2.1.0"
+
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
+
+  coverage:
+    name: Coverage
+    needs: [lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for diff-cover
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests/ --cov=src/pydantic_marshmallow --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false  # Don't fail if Codecov is down
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Check diff coverage (changed lines)
+        run: |
+          uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=80
+        continue-on-error: true  # Warn but don't fail initially
 
   # This job is used as the required status check for branch protection
   # Configure GitHub: Settings > Branches > Branch protection > Require "CI Passed"
   ci-passed:
     name: CI Passed
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, test, coverage]
     if: always()
     steps:
       - name: Check all jobs passed
@@ -89,6 +183,10 @@ jobs:
           fi
           if [[ "${{ needs.test.result }}" != "success" ]]; then
             echo "❌ Test job failed"
+            exit 1
+          fi
+          if [[ "${{ needs.coverage.result }}" != "success" ]]; then
+            echo "❌ Coverage job failed"
             exit 1
           fi
           echo "✅ All CI checks passed!"

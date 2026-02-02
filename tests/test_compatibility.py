@@ -360,20 +360,15 @@ def get_pydantic_version() -> tuple:
     return tuple(int(x) for x in ver.split(".")[:2])
 
 
-class TestVersionInfo:
-    """Display version info for debugging."""
+@pytest.fixture(scope="module", autouse=True)
+def show_version_info():
+    """Display version info for debugging (runs once per module)."""
+    from importlib.metadata import version
 
-    def test_show_versions(self):
-        """Print version info (always passes)."""
-        from importlib.metadata import version
+    ma_version = version("marshmallow")
+    pd_version = version("pydantic")
 
-        ma_version = version("marshmallow")
-        pd_version = version("pydantic")
-
-        print(f"\n{'='*60}")
-        print(f"Marshmallow version: {ma_version}")
-        print(f"Pydantic version: {pd_version}")
-        print(f"{'='*60}\n")
-
-        # Always pass - this is just for info
-        assert True
+    print(f"\n{'='*60}")
+    print(f"Marshmallow version: {ma_version}")
+    print(f"Pydantic version: {pd_version}")
+    print(f"{'='*60}\n")
