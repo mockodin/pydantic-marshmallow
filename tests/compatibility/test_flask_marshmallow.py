@@ -152,13 +152,14 @@ class TestPydanticSchemaWithFlask:
         @app.route("/users", methods=["POST"])
         def create_user():
             from flask import request
+            from marshmallow import ValidationError
 
             schema = UserSchema()
             try:
                 user = schema.load(request.get_json())
                 return jsonify(schema.dump(user)), 201
-            except Exception as e:
-                return jsonify({"error": str(e)}), 400
+            except ValidationError as e:
+                return jsonify({"error": e.messages}), 400
 
         # Valid request
         response = client.post(
