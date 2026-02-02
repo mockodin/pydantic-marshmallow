@@ -9,6 +9,29 @@ Bridge Pydantic's power with Marshmallow's ecosystem. Use Pydantic models for va
 
 📖 **[Documentation](https://mockodin.github.io/pydantic-marshmallow)** | 🐙 **[GitHub](https://github.com/mockodin/pydantic-marshmallow)**
 
+## Why pydantic-marshmallow?
+
+Get the best of both worlds: **Pydantic's speed** with **Marshmallow's ecosystem**.
+
+### Performance
+
+pydantic-marshmallow uses Pydantic's Rust-powered validation engine under the hood, delivering significant performance improvements over native Marshmallow—especially for nested data structures:
+
+| Operation | pydantic-marshmallow | Marshmallow | Speedup |
+|-----------|---------------------|-------------|---------|
+| Simple load | 4.8 µs | 5.3 µs | **1.1x faster** |
+| Nested model | 5.9 µs | 12.0 µs | **2x faster** |
+| Deep nested (4 levels) | 9.2 µs | 34.1 µs | **3.7x faster** |
+| Batch (100 items) | 450 µs | 490 µs | **1.1x faster** |
+
+*Benchmarks run on Python 3.11. Run `python -m benchmarks.run_benchmarks` to reproduce.*
+
+### Why it matters
+
+- **Existing Marshmallow projects**: Incrementally adopt Pydantic validation without rewriting your API layer
+- **Flask/webargs/apispec users**: Keep your integrations, get faster validation
+- **Performance-sensitive APIs**: Nested model validation is 2-4x faster than native Marshmallow
+
 ## Features
 
 - **Pydantic Validation**: Leverage Pydantic's Rust-powered validation engine
