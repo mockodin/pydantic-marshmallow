@@ -202,6 +202,21 @@ schema.dump(user, exclude_unset=True)
 schema.dump(user, exclude_defaults=True)
 ```
 
+## JSON Serialization
+
+Direct JSON string support:
+
+```python
+# Deserialize from JSON string
+user = schema.loads('{"name": "Alice", "email": "alice@example.com", "age": 30}')
+
+# Serialize to JSON string  
+json_str = schema.dumps(user)
+
+# Batch operations
+users = schema.loads('[{"name": "Alice", ...}, {"name": "Bob", ...}]', many=True)
+```
+
 ## Flask-Marshmallow Integration
 
 ```python
@@ -251,6 +266,69 @@ spec = APISpec(
 )
 
 spec.components.schema("User", schema=UserSchema)
+```
+
+## flask-smorest Integration
+
+Build REST APIs with automatic OpenAPI documentation:
+
+```python
+from flask import Flask
+from flask_smorest import Api, Blueprint
+from pydantic import BaseModel, Field
+from pydantic_marshmallow import schema_for
+
+app = Flask(__name__)
+app.config["API_TITLE"] = "My API"
+app.config["API_VERSION"] = "v1"
+app.config["OPENAPI_VERSION"] = "3.0.2"
+
+api = Api(app)
+blp = Blueprint("users", __name__, url_prefix="/users")
+
+class UserCreate(BaseModel):
+    name: str = Field(min_length=1)
+    email: str
+
+UserCreateSchema = schema_for(UserCreate)
+UserSchema = schema_for(User)
+
+@blp.post("/")
+@blp.arguments(UserCreateSchema)
+@blp.response(201, UserSchema)
+def create_user(data):
+    # data is a Pydantic UserCreate instance
+    user = User(id=1, name=data.name, email=data.email)
+    return UserSchema().dump(user)
+
+api.register_blueprint(blp)
+```
+
+## SQLAlchemy Pattern
+
+Use Pydantic for API validation alongside SQLAlchemy ORM:
+
+```python
+from sqlalchemy.orm import Session
+from pydantic_marshmallow import schema_for
+
+# Pydantic model for API validation
+class UserCreate(BaseModel):
+    name: str = Field(min_length=1)
+    email: str
+
+UserCreateSchema = schema_for(UserCreate)
+
+def create_user(session: Session, data: dict):
+    # Validate API input with Pydantic
+    schema = UserCreateSchema()
+    validated = schema.load(data)  # Returns Pydantic model
+    
+    # Create ORM object from validated data
+    orm_user = UserModel(name=validated.name, email=validated.email)
+    session.add(orm_user)
+    session.commit()
+    return orm_user
 ```
 
 ## HybridModel
