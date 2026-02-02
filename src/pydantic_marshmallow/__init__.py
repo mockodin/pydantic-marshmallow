@@ -51,17 +51,16 @@ Features:
 
 # Re-export Marshmallow's validators - these work with PydanticSchema
 # Also export hooks for convenience
+# Note: We re-export Marshmallow's @validates and @validates_schema above.
+# Our bridge's _do_load calls Marshmallow's native validator system,
+# so `from marshmallow import validates` works correctly with PydanticSchema.
+# Version is managed by setuptools-scm from git tags
+from importlib.metadata import version as _version
+
 from marshmallow import EXCLUDE, INCLUDE, RAISE, post_dump, post_load, pre_dump, pre_load, validates, validates_schema
 
 from .bridge import HybridModel, PydanticSchema, pydantic_schema, schema_for
 from .errors import BridgeValidationError
-
-# Note: We re-export Marshmallow's @validates and @validates_schema above.
-# Our bridge's _do_load calls Marshmallow's native validator system,
-# so `from marshmallow import validates` works correctly with PydanticSchema.
-
-# Version is managed by setuptools-scm from git tags
-from importlib.metadata import version as _version
 
 __version__ = _version("pydantic-marshmallow")
 __all__ = [
