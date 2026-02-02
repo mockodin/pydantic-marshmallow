@@ -686,7 +686,7 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                 raise
 
             # If INCLUDE, add unknown fields back to validated data
-            if unknown_setting == INCLUDE and model_class:
+            if unknown_setting == INCLUDE and model_field_names is not None:
                 for field in (set(processed_data.keys()) - model_field_names):
                     validated_data[field] = processed_data[field]
         else:
