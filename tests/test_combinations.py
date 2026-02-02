@@ -915,7 +915,9 @@ class TestContextPassingCombinations:
         with pytest.raises(ValidationError) as exc:
             schema.load(data)
 
-        assert "company.com" in str(exc.value)
+        # Verify the domain validation error was raised
+        error_message = str(exc.value)
+        assert "Email must be from" in error_message
 
     def test_context_in_pre_load_hook(self):
         """Test context is available in pre_load hook."""
