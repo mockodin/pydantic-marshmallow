@@ -22,10 +22,18 @@ from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 import pytest
-from marshmallow import (EXCLUDE, INCLUDE, RAISE, ValidationError, post_dump,
-                         post_load, pre_load, validates, validates_schema)
-from pydantic import (BaseModel, ConfigDict, Field, computed_field,
-                      field_validator, model_validator)
+from marshmallow import (
+    EXCLUDE,
+    INCLUDE,
+    RAISE,
+    ValidationError,
+    post_dump,
+    post_load,
+    pre_load,
+    validates,
+    validates_schema,
+)
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from pydantic_marshmallow import PydanticSchema, schema_for
 
