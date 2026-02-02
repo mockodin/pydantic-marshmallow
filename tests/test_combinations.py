@@ -33,14 +33,7 @@ from marshmallow import (
     validates,
     validates_schema,
 )
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    computed_field,
-    field_validator,
-    model_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from pydantic_marshmallow import PydanticSchema, schema_for
 
@@ -90,7 +83,7 @@ class Person(BaseModel):
     age: int = Field(ge=0, le=150)
     address: Address
 
-    @computed_field
+    @computed_field  # type: ignore[misc]
     @property
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}"
@@ -128,12 +121,12 @@ class Project(BaseModel):
     budget: Decimal = Field(decimal_places=2, default=Decimal("0.00"))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    @computed_field
+    @computed_field  # type: ignore[misc]
     @property
     def task_count(self) -> int:
         return len(self.tasks)
 
-    @computed_field
+    @computed_field  # type: ignore[misc]
     @property
     def active_tasks(self) -> int:
         return sum(1 for t in self.tasks if t.status == Status.ACTIVE)
@@ -915,7 +908,11 @@ class TestContextPassingCombinations:
         with pytest.raises(ValidationError) as exc:
             schema.load(data)
 
-        assert "company.com" in str(exc.value)
+        # Verify the domain validation error was raised on the email field
+        messages = exc.value.messages
+        assert "email" in messages
+        allowed_domain = schema.context["allowed_domain"]
+        assert messages["email"] == [f"Email must be from {allowed_domain}"]
 
     def test_context_in_pre_load_hook(self):
         """Test context is available in pre_load hook."""

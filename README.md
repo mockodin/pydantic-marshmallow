@@ -178,7 +178,7 @@ class User(BaseModel):
     first: str
     last: str
 
-    @computed_field
+    @computed_field  # type: ignore[misc]
     @property
     def full_name(self) -> str:
         return f"{self.first} {self.last}"

@@ -1,0 +1,40 @@
+{
+    "python.analysis.extraPaths": [
+        "src"
+    ],
+    "python.analysis.include": [
+        "src/**/*.py"
+    ],
+    "python.analysis.exclude": [
+        "tests/**",
+        "benchmarks/**",
+        "examples/**",
+        "**/__pycache__/**",
+        ".venv/**"
+    ],
+    "python.analysis.ignore": [
+        "tests/**",
+        "benchmarks/**",
+        "examples/**"
+    ],
+    "python.analysis.diagnosticMode": "workspace",
+    "mypy-type-checker.args": [
+        "src/pydantic_marshmallow"
+    ],
+    "flake8.args": [
+        "src/pydantic_marshmallow"
+    ],
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit",
+            "source.fixAll.autopep8": "never",
+            "source.fixAll.ruff": "explicit"
+        }
+    },
+    "autopep8.enable": false,
+    "python.formatting.provider": "none",
+    "ruff.format.args": [],
+    "ruff.organizeImports": true
+}
