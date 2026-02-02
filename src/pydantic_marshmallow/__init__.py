@@ -62,7 +62,11 @@ from marshmallow import EXCLUDE, INCLUDE, RAISE, post_dump, post_load, pre_dump,
 from .bridge import HybridModel, PydanticSchema, pydantic_schema, schema_for
 from .errors import BridgeValidationError
 
-__version__ = _version("pydantic-marshmallow")
+try:
+    __version__ = _version("pydantic-marshmallow")
+except Exception:
+    # Fallback for development or environments without installed package metadata
+    __version__ = "0.0.0.dev0"
 __all__ = [
     "EXCLUDE",
     "INCLUDE",
