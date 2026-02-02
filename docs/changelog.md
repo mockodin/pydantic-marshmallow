@@ -4,8 +4,10 @@ All notable changes to pydantic-marshmallow will be documented here.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-01-15
+
 ### Added
-- Initial release
+- Initial stable release
 - `PydanticSchema` class for bridging Pydantic models with Marshmallow
 - `schema_for()` factory function
 - `@pydantic_schema` decorator
@@ -31,7 +33,3 @@ All notable changes to pydantic-marshmallow will be documented here.
 - marshmallow-dataclass
 - marshmallow-oneofschema
 - connexion
-
-## [0.1.0] - TBD
-
-Initial release.

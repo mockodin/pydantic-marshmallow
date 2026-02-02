@@ -60,7 +60,10 @@ from .errors import BridgeValidationError
 # Our bridge's _do_load calls Marshmallow's native validator system,
 # so `from marshmallow import validates` works correctly with PydanticSchema.
 
-__version__ = "0.1.0"
+# Version is managed by setuptools-scm from git tags
+from importlib.metadata import version as _version
+
+__version__ = _version("pydantic-marshmallow")
 __all__ = [
     "EXCLUDE",
     "INCLUDE",
