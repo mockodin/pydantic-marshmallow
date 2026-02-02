@@ -7,58 +7,73 @@ Flow: Input → Marshmallow pre_load → PYDANTIC VALIDATES → Marshmallow post
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence, Set as AbstractSet
+import threading
+from collections.abc import Callable, Sequence
+from collections.abc import Set as AbstractSet
+from functools import lru_cache
 from typing import Any, ClassVar, Generic, TypeVar, cast, get_args, get_origin
 
-from marshmallow import EXCLUDE, INCLUDE, RAISE, Schema, fields as ma_fields
+from marshmallow import EXCLUDE, INCLUDE, RAISE, Schema
+from marshmallow import fields as ma_fields
 from marshmallow.decorators import VALIDATES, VALIDATES_SCHEMA
 from marshmallow.error_store import ErrorStore
-from marshmallow.exceptions import ValidationError as MarshmallowValidationError
+from marshmallow.exceptions import \
+    ValidationError as MarshmallowValidationError
 from marshmallow.schema import SchemaMeta
 from marshmallow.utils import missing as ma_missing
-from pydantic import BaseModel, ConfigDict, ValidationError as PydanticValidationError
+from pydantic import BaseModel, ConfigDict
+from pydantic import ValidationError as PydanticValidationError
 
-from .errors import BridgeValidationError, convert_pydantic_errors, format_pydantic_error
+from .errors import (BridgeValidationError, convert_pydantic_errors,
+                     format_pydantic_error)
 from .field_conversion import convert_model_fields, convert_pydantic_field
 from .validators import cache_validators
 
 M = TypeVar("M", bound=BaseModel)
 
+# =============================================================================
+# Module-level Caches
+# =============================================================================
+# Thread Safety: All caches use thread-safe implementations to support both
+# GIL-enabled Python and free-threaded Python 3.14+ (PEP 703).
+# - @lru_cache: Inherently thread-safe (uses internal lock)
+# - Dict caches: Protected by threading.Lock for write operations
+#
+# Cache Invalidation: These caches assume Pydantic models are immutable after
+# definition. Dynamic model modification at runtime (monkey-patching, adding
+# fields) will result in stale cached data. This is an accepted trade-off for
+# performance gains.
+# =============================================================================
+
+# Thread lock for cache writes (supports free-threaded Python 3.14+)
+# Use RLock (reentrant) since from_model() may be called recursively
+_cache_lock = threading.RLock()
+
 # Module-level cache for HybridModel schemas
 _hybrid_schema_cache: dict[type[Any], type[PydanticSchema[Any]]] = {}
 
-# Cache for schema_for/from_model - key is (model, frozen options)
+# Cache for schema_for/from_model - key is (model, schema_name, frozen options)
 # This avoids recreating schema classes for the same model+options
-_schema_class_cache: dict[tuple[type[Any], tuple[tuple[str, Any], ...]], type[Any]] = {}
+_schema_class_cache: dict[tuple[type[Any], str | None, tuple[tuple[str, Any], ...]], type[Any]] = {}
 
 # Field validator registry: maps (schema_class, field_name) -> list of validator functions
 _field_validators: dict[tuple[type[Any], str], list[Callable[..., Any]]] = {}
 _schema_validators: dict[type[Any], list[Callable[..., Any]]] = {}
 
-# PERFORMANCE: Cache model field names (with aliases) per model class
-# This avoids repeated set() construction and iteration in the hot path
-_model_field_names_cache: dict[type[BaseModel], frozenset[str]] = {}
 
-
+@lru_cache(maxsize=1024)
 def _get_model_field_names_with_aliases(model_class: type[BaseModel]) -> frozenset[str]:
     """
     Get cached frozenset of model field names including aliases.
 
-    This caches the result per model class to avoid repeated computation
-    in the load() hot path.
+    Thread-safe via @lru_cache. Caches the result per model class to avoid
+    repeated computation in the load() hot path.
     """
-    cached = _model_field_names_cache.get(model_class)
-    if cached is not None:
-        return cached
-
     field_names = set(model_class.model_fields.keys())
     for field_info in model_class.model_fields.values():
         if field_info.alias:
             field_names.add(field_info.alias)
-
-    result = frozenset(field_names)
-    _model_field_names_cache[model_class] = result
-    return result
+    return frozenset(field_names)
 
 
 class PydanticSchemaMeta(SchemaMeta):
@@ -1095,12 +1110,16 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         Returns:
             A PydanticSchema subclass
         """
-        # Build cache key from model and options
+        # Build cache key from model, schema_name, and options
         # Sort options to ensure consistent keys
+        # Note: schema_name must be included since it affects the generated class name
+        cache_key: tuple[type[Any], str | None, tuple[tuple[str, Any], ...]] | None = None
         try:
-            cache_key = (model, tuple(sorted(meta_options.items())))
-            if cache_key in _schema_class_cache:
-                return _schema_class_cache[cache_key]
+            cache_key = (model, schema_name, tuple(sorted(meta_options.items())))
+            # Thread-safe read (atomic dict lookup)
+            cached = _schema_class_cache.get(cache_key)
+            if cached is not None:
+                return cached
         except TypeError:
             # Unhashable options (e.g., list values) - skip cache
             cache_key = None
@@ -1137,9 +1156,10 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
 
         schema_cls = type(name, (cls,), class_dict)
 
-        # Cache the schema class
+        # Thread-safe cache write (supports free-threaded Python 3.14+)
         if cache_key is not None:
-            _schema_class_cache[cache_key] = schema_cls
+            with _cache_lock:
+                _schema_class_cache[cache_key] = schema_cls
 
         return schema_cls
 
@@ -1233,10 +1253,17 @@ class HybridModel(BaseModel):
 
     @classmethod
     def marshmallow_schema(cls) -> type[PydanticSchema[Any]]:
-        """Get or create the Marshmallow schema for this model."""
-        if cls not in _hybrid_schema_cache:
-            _hybrid_schema_cache[cls] = PydanticSchema.from_model(cls)
-        return _hybrid_schema_cache[cls]
+        """Get or create the Marshmallow schema for this model (thread-safe)."""
+        # Thread-safe read
+        cached = _hybrid_schema_cache.get(cls)
+        if cached is not None:
+            return cached
+        # Thread-safe write
+        with _cache_lock:
+            # Double-check after acquiring lock
+            if cls not in _hybrid_schema_cache:
+                _hybrid_schema_cache[cls] = PydanticSchema.from_model(cls)
+            return _hybrid_schema_cache[cls]
 
     @classmethod
     def ma_load(cls, data: dict[str, Any], **kwargs: Any) -> HybridModel:

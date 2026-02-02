@@ -7,9 +7,10 @@ TYPE_MAPPING for basic types and adding support for generic collections.
 from enum import Enum as PyEnum
 from functools import lru_cache
 from types import UnionType
-from typing import Any, Literal, Union, get_args, get_origin
+from typing import Any, Literal, Union, cast, get_args, get_origin
 
-from marshmallow import Schema, fields as ma_fields
+from marshmallow import Schema
+from marshmallow import fields as ma_fields
 from pydantic import BaseModel
 
 # Track models being processed to detect recursion
@@ -52,10 +53,16 @@ def type_to_marshmallow_field(type_hint: Any) -> ma_fields.Field:
         An appropriate Marshmallow field instance
     """
     # FAST PATH: Simple types (str, int, float, bool, datetime, etc.)
-    # Check TYPE_MAPPING first to skip all the isinstance/origin checks
-    # This handles ~60-80% of fields in typical models
-    if isinstance(type_hint, type) and type_hint in Schema.TYPE_MAPPING:
-        return _get_simple_field_class(type_hint)()
+    # Check TYPE_MAPPING first to skip all the isinstance/origin checks.
+    # This handles ~60-80% of fields in typical models, but we must not
+    # short-circuit for Enums or Pydantic models, which have specialized handling.
+    if (
+        isinstance(type_hint, type)
+        and type_hint in Schema.TYPE_MAPPING
+        and not issubclass(type_hint, (PyEnum, BaseModel))
+    ):
+        # Cast needed for mypy: type_hint is confirmed to be a type at this point
+        return _get_simple_field_class(cast(type, type_hint))()
 
     origin = get_origin(type_hint)
     args = get_args(type_hint)

@@ -27,20 +27,20 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal
 
-from marshmallow import EXCLUDE, Schema
-from marshmallow import fields as ma_fields
-from marshmallow import post_load, pre_load, validate
-from pydantic import (BaseModel, EmailStr, Field, computed_field,
-                      field_validator, model_validator)
+from marshmallow import EXCLUDE, Schema, fields as ma_fields, post_load, pre_load, validate
+from pydantic import BaseModel, EmailStr, Field, computed_field, field_validator, model_validator
 
 from pydantic_marshmallow import PydanticSchema, schema_for
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from benchmarks.benchmark_framework import (BenchmarkSuite, compare_results,
-                                            format_comparison_table,
-                                            format_results_table)
+from benchmarks.benchmark_framework import (
+    BenchmarkSuite,
+    compare_results,
+    format_comparison_table,
+    format_results_table,
+)
 
 # =============================================================================
 # Pydantic Models for Benchmarks

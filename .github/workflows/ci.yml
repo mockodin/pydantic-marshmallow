@@ -46,7 +46,32 @@ jobs:
         marshmallow-version: ['latest']  # Default to latest Marshmallow (3.x from lock)
         pydantic-version: ['latest']  # Default to latest Pydantic
         include:
-          # Test Marshmallow 4.x latest on Ubuntu with Python 3.11 and 3.12
+          # === BASE VERSIONS (minimum supported) ===
+          # Marshmallow 3.18.0 + Pydantic 2.0.0 - minimum supported combo
+          - os: ubuntu-latest
+            python-version: '3.10'
+            marshmallow-version: '3.18.0'
+            pydantic-version: '2.0.0'
+          # Pydantic 2.0.0 with latest Marshmallow 3.x
+          - os: ubuntu-latest
+            python-version: '3.11'
+            marshmallow-version: 'latest'
+            pydantic-version: '2.0.0'
+
+          # === INTERMEDIATE VERSIONS ===
+          # Marshmallow 3.21.0 (last 3.x before 4.0) + Pydantic 2.5.x
+          - os: ubuntu-latest
+            python-version: '3.11'
+            marshmallow-version: '3.21.0'
+            pydantic-version: '2.5'
+          # Pydantic 2.5 (significant validation changes) with latest Marshmallow
+          - os: ubuntu-latest
+            python-version: '3.12'
+            marshmallow-version: 'latest'
+            pydantic-version: '2.5'
+
+          # === LATEST/BLEEDING EDGE ===
+          # Marshmallow 4.x latest on Ubuntu with Python 3.11 and 3.12
           - os: ubuntu-latest
             python-version: '3.11'
             marshmallow-version: '4-latest'
@@ -55,10 +80,10 @@ jobs:
             python-version: '3.12'
             marshmallow-version: '4-latest'
             pydantic-version: 'latest'
-          # Test Pydantic 2.5 (oldest commonly used) on Ubuntu
+          # Marshmallow 4.x + Pydantic 2.5 cross-version
           - os: ubuntu-latest
             python-version: '3.11'
-            marshmallow-version: 'latest'
+            marshmallow-version: '4-latest'
             pydantic-version: '2.5'
         exclude:
           # Reduce matrix size - test all Python versions on Ubuntu, latest on others
@@ -91,9 +116,17 @@ jobs:
         if: matrix.marshmallow-version == '4-latest'
         run: uv pip install --upgrade "marshmallow>=4.0.0"
 
-      - name: Override Pydantic version (if specified)
+      - name: Override Marshmallow to specific version
+        if: matrix.marshmallow-version != 'latest' && matrix.marshmallow-version != '4-latest'
+        run: uv pip install "marshmallow==${{ matrix.marshmallow-version }}"
+
+      - name: Override Pydantic to 2.5.x
         if: matrix.pydantic-version == '2.5'
         run: uv pip install "pydantic>=2.5.0,<2.6.0"
+
+      - name: Override Pydantic to specific version
+        if: matrix.pydantic-version == '2.0.0'
+        run: uv pip install "pydantic>=2.0.0,<2.1.0"
 
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
