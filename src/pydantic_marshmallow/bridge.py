@@ -660,15 +660,15 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         # OPTIMIZATION: Determine if we need model_dump() for validators/result
         # Skip expensive model_dump() when not needed
         has_validators = bool(
-            hooks[VALIDATES] or
-            hooks[VALIDATES_SCHEMA] or
-            self._field_validators_cache or
-            self._schema_validators_cache
+            hooks[VALIDATES]
+            or hooks[VALIDATES_SCHEMA]
+            or self._field_validators_cache
+            or self._schema_validators_cache
         )
         needs_dict = (
-            not return_instance or  # Need dict for result
-            unknown_setting == INCLUDE or  # Need dict to merge unknown fields
-            has_validators  # Need dict for validators
+            not return_instance  # Need dict for result
+            or unknown_setting == INCLUDE  # Need dict to merge unknown fields
+            or has_validators  # Need dict for validators
         )
 
         if model_class:
