@@ -304,6 +304,36 @@ def create_user(data):
 api.register_blueprint(blp)
 ```
 
+## flask-rebar Integration
+
+Build REST APIs with automatic Swagger documentation:
+
+```python
+from flask import Flask
+from flask_rebar import Rebar, get_validated_body
+from pydantic_marshmallow import schema_for
+
+app = Flask(__name__)
+rebar = Rebar()
+registry = rebar.create_handler_registry()
+
+UserCreateSchema = schema_for(UserCreate)
+UserSchema = schema_for(User)
+
+@registry.handles(
+    rule="/users",
+    method="POST",
+    request_body_schema=UserCreateSchema(),
+    response_body_schema=UserSchema(),
+)
+def create_user():
+    data = get_validated_body()  # Pydantic UserCreate instance
+    user = User(id=1, name=data.name, email=data.email)
+    return UserSchema().dump(user)
+
+rebar.init_app(app)
+```
+
 ## SQLAlchemy Pattern
 
 Use Pydantic for API validation alongside SQLAlchemy ORM:
