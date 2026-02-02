@@ -35,7 +35,7 @@ jobs:
         run: uv run mypy src/pydantic_marshmallow/
 
   test:
-    name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    name: Test (Py${{ matrix.python-version }}, ${{ matrix.os }}, MA${{ matrix.marshmallow-version }}, PD${{ matrix.pydantic-version }})
     needs: [lint]  # Only run tests after lint passes
     runs-on: ${{ matrix.os }}
     strategy:
@@ -43,6 +43,23 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        marshmallow-version: ['latest']  # Default to latest Marshmallow (3.x from lock)
+        pydantic-version: ['latest']  # Default to latest Pydantic
+        include:
+          # Test Marshmallow 4.x latest on Ubuntu with Python 3.11 and 3.12
+          - os: ubuntu-latest
+            python-version: '3.11'
+            marshmallow-version: '4-latest'
+            pydantic-version: 'latest'
+          - os: ubuntu-latest
+            python-version: '3.12'
+            marshmallow-version: '4-latest'
+            pydantic-version: 'latest'
+          # Test Pydantic 2.5 (oldest commonly used) on Ubuntu
+          - os: ubuntu-latest
+            python-version: '3.11'
+            marshmallow-version: 'latest'
+            pydantic-version: '2.5'
         exclude:
           # Reduce matrix size - test all Python versions on Ubuntu, latest on others
           - os: windows-latest
@@ -69,6 +86,14 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --all-extras
+
+      - name: Override Marshmallow to 4.x latest
+        if: matrix.marshmallow-version == '4-latest'
+        run: uv pip install --upgrade "marshmallow>=4.0.0"
+
+      - name: Override Pydantic version (if specified)
+        if: matrix.pydantic-version == '2.5'
+        run: uv pip install "pydantic>=2.5.0,<2.6.0"
 
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
