@@ -9,6 +9,29 @@ Bridge Pydantic's power with Marshmallow's ecosystem. Use Pydantic models for va
 
 📖 **[Documentation](https://mockodin.github.io/pydantic-marshmallow)** | 🐙 **[GitHub](https://github.com/mockodin/pydantic-marshmallow)**
 
+## Why pydantic-marshmallow?
+
+Get the best of both worlds: **Pydantic's speed** with **Marshmallow's ecosystem**.
+
+### Performance
+
+pydantic-marshmallow uses Pydantic's Rust-powered validation engine under the hood, delivering significant performance improvements over native Marshmallow—especially for nested data structures:
+
+| Operation | pydantic-marshmallow | Marshmallow | Speedup |
+|-----------|---------------------|-------------|---------|
+| Simple load | 4.8 µs | 5.3 µs | **1.1x faster** |
+| Nested model | 5.9 µs | 12.0 µs | **2x faster** |
+| Deep nested (4 levels) | 9.2 µs | 34.1 µs | **3.7x faster** |
+| Batch (100 items) | 450 µs | 490 µs | **1.1x faster** |
+
+*Benchmarks run on Python 3.11. Run `python -m benchmarks.run_benchmarks` to reproduce.*
+
+### Why it matters
+
+- **Existing Marshmallow projects**: Incrementally adopt Pydantic validation without rewriting your API layer
+- **Flask/webargs/apispec users**: Keep your integrations, get faster validation
+- **Performance-sensitive APIs**: Nested model validation is 2-4x faster than native Marshmallow
+
 ## Features
 
 - **Pydantic Validation**: Leverage Pydantic's Rust-powered validation engine
@@ -179,6 +202,21 @@ schema.dump(user, exclude_unset=True)
 schema.dump(user, exclude_defaults=True)
 ```
 
+## JSON Serialization
+
+Direct JSON string support:
+
+```python
+# Deserialize from JSON string
+user = schema.loads('{"name": "Alice", "email": "alice@example.com", "age": 30}')
+
+# Serialize to JSON string  
+json_str = schema.dumps(user)
+
+# Batch operations
+users = schema.loads('[{"name": "Alice", ...}, {"name": "Bob", ...}]', many=True)
+```
+
 ## Flask-Marshmallow Integration
 
 ```python
@@ -228,6 +266,99 @@ spec = APISpec(
 )
 
 spec.components.schema("User", schema=UserSchema)
+```
+
+## flask-smorest Integration
+
+Build REST APIs with automatic OpenAPI documentation:
+
+```python
+from flask import Flask
+from flask_smorest import Api, Blueprint
+from pydantic import BaseModel, Field
+from pydantic_marshmallow import schema_for
+
+app = Flask(__name__)
+app.config["API_TITLE"] = "My API"
+app.config["API_VERSION"] = "v1"
+app.config["OPENAPI_VERSION"] = "3.0.2"
+
+api = Api(app)
+blp = Blueprint("users", __name__, url_prefix="/users")
+
+class UserCreate(BaseModel):
+    name: str = Field(min_length=1)
+    email: str
+
+UserCreateSchema = schema_for(UserCreate)
+UserSchema = schema_for(User)
+
+@blp.post("/")
+@blp.arguments(UserCreateSchema)
+@blp.response(201, UserSchema)
+def create_user(data):
+    # data is a Pydantic UserCreate instance
+    user = User(id=1, name=data.name, email=data.email)
+    return UserSchema().dump(user)
+
+api.register_blueprint(blp)
+```
+
+## flask-rebar Integration
+
+Build REST APIs with automatic Swagger documentation:
+
+```python
+from flask import Flask
+from flask_rebar import Rebar, get_validated_body
+from pydantic_marshmallow import schema_for
+
+app = Flask(__name__)
+rebar = Rebar()
+registry = rebar.create_handler_registry()
+
+UserCreateSchema = schema_for(UserCreate)
+UserSchema = schema_for(User)
+
+@registry.handles(
+    rule="/users",
+    method="POST",
+    request_body_schema=UserCreateSchema(),
+    response_body_schema=UserSchema(),
+)
+def create_user():
+    data = get_validated_body()  # Pydantic UserCreate instance
+    user = User(id=1, name=data.name, email=data.email)
+    return UserSchema().dump(user)
+
+rebar.init_app(app)
+```
+
+## SQLAlchemy Pattern
+
+Use Pydantic for API validation alongside SQLAlchemy ORM:
+
+```python
+from sqlalchemy.orm import Session
+from pydantic_marshmallow import schema_for
+
+# Pydantic model for API validation
+class UserCreate(BaseModel):
+    name: str = Field(min_length=1)
+    email: str
+
+UserCreateSchema = schema_for(UserCreate)
+
+def create_user(session: Session, data: dict):
+    # Validate API input with Pydantic
+    schema = UserCreateSchema()
+    validated = schema.load(data)  # Returns Pydantic model
+    
+    # Create ORM object from validated data
+    orm_user = UserModel(name=validated.name, email=validated.email)
+    session.add(orm_user)
+    session.commit()
+    return orm_user
 ```
 
 ## HybridModel
