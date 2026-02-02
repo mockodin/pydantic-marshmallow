@@ -9,8 +9,7 @@ from functools import lru_cache
 from types import UnionType
 from typing import Any, Literal, Union, cast, get_args, get_origin
 
-from marshmallow import Schema
-from marshmallow import fields as ma_fields
+from marshmallow import Schema, fields as ma_fields
 from pydantic import BaseModel
 
 # Track models being processed to detect recursion
