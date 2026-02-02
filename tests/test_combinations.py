@@ -892,12 +892,17 @@ class TestContextPassingCombinations:
             @validates("email")
             def validate_email_domain(self, value: str, **kwargs) -> None:
                 allowed_domain = self.context.get("allowed_domain")
-                # Using endswith with @ prefix (e.g., "@company.com") is safe for email domain validation
-                if allowed_domain and not value.endswith(allowed_domain):  # lgtm[py/incomplete-url-substring-sanitization]
-                    raise ValidationError(f"Email must be from {allowed_domain}")
+                if allowed_domain:
+                    # Split email at @ and check domain part explicitly
+                    if "@" in value:
+                        _, domain = value.rsplit("@", 1)
+                        if domain != allowed_domain:
+                            raise ValidationError(f"Email must be from {allowed_domain}")
+                    else:
+                        raise ValidationError("Invalid email format")
 
         schema = ContextAwarePersonSchema()
-        schema.context = {"allowed_domain": "@company.com"}
+        schema.context = {"allowed_domain": "company.com"}
 
         data = {
             "first_name": "Alice",
