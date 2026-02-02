@@ -89,12 +89,7 @@ class SearchQueryPydantic(BaseModel):
     offset: int = Field(default=0, ge=0, description="Results offset")
 
 
-@pytest.fixture
-def app():
-    """Create a Flask application for testing."""
-    app = Flask(__name__)
-    app.config["TESTING"] = True
-    return app
+# Flask fixtures (app, client) provided by conftest.py
 
 
 @pytest.fixture
