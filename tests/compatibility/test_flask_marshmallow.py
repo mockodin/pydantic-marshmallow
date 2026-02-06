@@ -12,12 +12,7 @@ from pydantic import Field, field_validator
 from pydantic_marshmallow import schema_for
 
 # Import shared models from compatibility conftest
-from .conftest import (
-    AddressPydantic,
-    ProductPydantic,
-    UserPydantic,
-    UserWithAddressPydantic,
-)
+from .conftest import AddressPydantic, ProductPydantic, UserPydantic, UserWithAddressPydantic
 
 # Third-party imports with conditional availability
 try:
@@ -64,10 +59,13 @@ class TestFlaskMarshmallowBaseline:
 
     def test_native_schema_registration(self, app, ma):
         """Native Marshmallow schemas work with Flask-Marshmallow."""
+        from marshmallow import fields as ma_fields
 
+        # Use explicit field declarations (works on both MA 3.x and 4.x)
         class NativeUserSchema(ma.Schema):
-            class Meta:
-                fields = ("id", "name", "email")
+            id = ma_fields.Integer()
+            name = ma_fields.String()
+            email = ma_fields.String()
 
         schema = NativeUserSchema()
         result = schema.dump({"id": 1, "name": "Test", "email": "test@example.com"})

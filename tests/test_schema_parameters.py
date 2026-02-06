@@ -20,12 +20,7 @@ import pytest
 from marshmallow.exceptions import ValidationError
 from pydantic import BaseModel, ConfigDict, Field
 
-from pydantic_marshmallow import (
-    EXCLUDE,
-    INCLUDE,
-    PydanticSchema,
-    schema_for,
-)
+from pydantic_marshmallow import EXCLUDE, INCLUDE, PydanticSchema, schema_for
 
 # =============================================================================
 # Test Models

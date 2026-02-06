@@ -32,15 +32,17 @@ from pydantic import BaseModel, EmailStr, Field, computed_field, field_validator
 
 from pydantic_marshmallow import PydanticSchema, schema_for
 
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from benchmarks.benchmark_framework import (
+from benchmarks.benchmark_framework import (  # noqa: E402
     BenchmarkSuite,
     compare_results,
     format_comparison_table,
     format_results_table,
 )
+
 
 # =============================================================================
 # Pydantic Models for Benchmarks

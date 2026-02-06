@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypeVar
 
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -189,69 +190,120 @@ def _get_package_versions() -> dict[str, str]:
     return versions
 
 
+def _remove_outliers_iqr(samples: list[float], factor: float = 1.5) -> list[float]:
+    """Remove outliers using IQR method.
+
+    Args:
+        samples: Raw sample timings.
+        factor: IQR multiplier for outlier threshold (1.5 = standard, 3.0 = extreme only).
+
+    Returns:
+        Samples with outliers removed.
+    """
+    if len(samples) < 4:
+        return samples
+
+    sorted_samples = sorted(samples)
+    q1_idx = len(sorted_samples) // 4
+    q3_idx = (3 * len(sorted_samples)) // 4
+    q1 = sorted_samples[q1_idx]
+    q3 = sorted_samples[q3_idx]
+    iqr = q3 - q1
+
+    lower_bound = q1 - factor * iqr
+    upper_bound = q3 + factor * iqr
+
+    return [s for s in samples if lower_bound <= s <= upper_bound]
+
+
 def run_benchmark(
     func: Callable[[], Any],
     iterations: int = 1000,
     warmup: int = 100,
     name: str | None = None,
     collect_samples: bool = False,
+    runs: int = 3,
+    remove_outliers: bool = True,
 ) -> BenchmarkResult:
     """Run a benchmark with statistical analysis.
 
+    Uses multiple runs and takes median to reduce noise from system variance.
+    Optionally removes outliers using IQR method for cleaner statistics.
+
     Args:
         func: Zero-argument function to benchmark.
-        iterations: Number of iterations to run.
+        iterations: Number of iterations per run.
         warmup: Number of warmup iterations (not counted).
         name: Optional benchmark name.
         collect_samples: Whether to save individual sample timings.
+        runs: Number of complete runs to perform (takes median).
+        remove_outliers: Whether to remove outliers using IQR method.
 
     Returns:
         BenchmarkResult with timing statistics.
     """
-    # Warmup phase
-    for _ in range(warmup):
-        func()
+    all_run_medians: list[float] = []
+    all_samples: list[float] = []
 
-    # Force garbage collection before measurement
-    gc.collect()
-    gc.disable()
-
-    try:
-        samples: list[float] = []
-        start_total = time.perf_counter()
-
-        for _ in range(iterations):
-            start = time.perf_counter()
+    for _ in range(runs):
+        # Warmup phase before each run
+        for _ in range(warmup):
             func()
-            elapsed = time.perf_counter() - start
-            samples.append(elapsed * 1_000_000)  # Convert to microseconds
 
-        end_total = time.perf_counter()
-    finally:
-        gc.enable()
+        # Force garbage collection before measurement
+        gc.collect()
+        gc.disable()
 
-    total_time = end_total - start_total
+        try:
+            samples: list[float] = []
 
-    # Statistical analysis
-    sorted_samples = sorted(samples)
-    mean = statistics.mean(samples)
-    median = statistics.median(samples)
-    std_dev = statistics.stdev(samples) if len(samples) > 1 else 0.0
-    min_time = min(samples)
-    max_time = max(samples)
+            for _ in range(iterations):
+                start = time.perf_counter()
+                func()
+                elapsed = time.perf_counter() - start
+                samples.append(elapsed * 1_000_000)  # Convert to microseconds
+        finally:
+            gc.enable()
+
+        # Remove outliers from this run if enabled
+        if remove_outliers:
+            clean_samples = _remove_outliers_iqr(samples)
+        else:
+            clean_samples = samples
+
+        run_median = statistics.median(clean_samples)
+        all_run_medians.append(run_median)
+        all_samples.extend(clean_samples)
+
+    # Use median of run medians as the final result (most stable)
+    total_time = sum(all_run_medians) * iterations / 1_000_000  # Approximate
+
+    # Remove outliers from combined samples for final statistics
+    if remove_outliers:
+        final_samples = _remove_outliers_iqr(all_samples)
+    else:
+        final_samples = all_samples
+
+    # Statistical analysis on cleaned data
+    sorted_samples = sorted(final_samples)
+    mean = statistics.mean(final_samples)
+    median = statistics.median(all_run_medians)  # Median of medians
+    std_dev = statistics.stdev(final_samples) if len(final_samples) > 1 else 0.0
+    min_time = min(final_samples)
+    max_time = max(final_samples)
 
     # Percentiles
     p95_idx = int(0.95 * len(sorted_samples))
     p99_idx = int(0.99 * len(sorted_samples))
-    p95 = sorted_samples[p95_idx] if sorted_samples else 0.0
-    p99 = sorted_samples[p99_idx] if sorted_samples else 0.0
+    p95 = sorted_samples[min(p95_idx, len(sorted_samples) - 1)] if sorted_samples else 0.0
+    p99 = sorted_samples[min(p99_idx, len(sorted_samples) - 1)] if sorted_samples else 0.0
 
-    # Throughput
-    ops_per_sec = iterations / total_time if total_time > 0 else 0.0
+    # Throughput based on median
+    ops_per_sec = 1_000_000 / median if median > 0 else 0.0
 
     return BenchmarkResult(
         name=name or func.__name__,
-        iterations=iterations,
+        iterations=iterations * runs,
         total_time_s=total_time,
         mean_us=mean,
         median_us=median,
@@ -261,7 +313,7 @@ def run_benchmark(
         p95_us=p95,
         p99_us=p99,
         ops_per_sec=ops_per_sec,
-        samples=samples if collect_samples else [],
+        samples=all_samples if collect_samples else [],
     )
 
 
@@ -284,18 +336,24 @@ class BenchmarkSuite:
         name: str,
         iterations: int = 1000,
         warmup: int = 100,
+        runs: int = 3,
+        remove_outliers: bool = True,
     ) -> None:
         """Initialize benchmark suite.
 
         Args:
             name: Suite name for identification.
-            iterations: Default iterations per benchmark.
+            iterations: Default iterations per benchmark per run.
             warmup: Default warmup iterations.
+            runs: Default number of runs per benchmark (takes median).
+            remove_outliers: Whether to remove outliers using IQR method.
         """
         self.name = name
         self.iterations = iterations
         self.warmup = warmup
-        self._benchmarks: dict[str, tuple[Callable[[], Any], int, int]] = {}
+        self.runs = runs
+        self.remove_outliers = remove_outliers
+        self._benchmarks: dict[str, tuple[Callable[[], Any], int, int, int]] = {}
         self._last_results: BenchmarkSuiteResult | None = None
 
     def add(
@@ -303,6 +361,7 @@ class BenchmarkSuite:
         name: str,
         iterations: int | None = None,
         warmup: int | None = None,
+        runs: int | None = None,
     ) -> Callable[[F], F]:
         """Decorator to add a benchmark to the suite.
 
@@ -310,6 +369,7 @@ class BenchmarkSuite:
             name: Benchmark name.
             iterations: Override default iterations.
             warmup: Override default warmup.
+            runs: Override default runs.
 
         Returns:
             Decorator function.
@@ -320,6 +380,7 @@ class BenchmarkSuite:
                 func,
                 iterations or self.iterations,
                 warmup or self.warmup,
+                runs or self.runs,
             )
             return func
 
@@ -331,6 +392,7 @@ class BenchmarkSuite:
         func: Callable[[], Any],
         iterations: int | None = None,
         warmup: int | None = None,
+        runs: int | None = None,
     ) -> None:
         """Add a benchmark function directly (without decorator).
 
@@ -339,11 +401,13 @@ class BenchmarkSuite:
             func: Function to benchmark.
             iterations: Override default iterations.
             warmup: Override default warmup.
+            runs: Override default runs.
         """
         self._benchmarks[name] = (
             func,
             iterations or self.iterations,
             warmup or self.warmup,
+            runs or self.runs,
         )
 
     def run(
@@ -371,17 +435,22 @@ class BenchmarkSuite:
             print(f"Running benchmark suite: {self.name}")
             print(f"{'=' * 70}")
 
-        for name, (func, iterations, warmup) in benchmarks:
+        for name, (func, iterations, warmup, runs) in benchmarks:
             if verbose:
-                print(f"  Running: {name} ({iterations} iterations)...", end=" ")
+                print(f"  Running: {name} ({iterations}x{runs} iterations)...", end=" ")
 
             result = run_benchmark(
-                func, iterations=iterations, warmup=warmup, name=name
+                func,
+                iterations=iterations,
+                warmup=warmup,
+                name=name,
+                runs=runs,
+                remove_outliers=self.remove_outliers,
             )
             results[name] = result
 
             if verbose:
-                print(f"{result.mean_us:.2f} µs (±{result.std_dev_us:.2f})")
+                print(f"{result.median_us:.2f} µs (±{result.std_dev_us:.2f})")
 
         suite_result = BenchmarkSuiteResult(
             suite_name=self.name,
@@ -436,16 +505,16 @@ class ComparisonResult:
 
     Attributes:
         name: Benchmark name.
-        baseline_mean_us: Baseline mean time.
-        current_mean_us: Current mean time.
+        baseline_median_us: Baseline median time.
+        current_median_us: Current median time.
         change_percent: Percentage change (positive = slower).
         is_regression: Whether this is a significant regression.
         significance: Statistical significance indicator.
     """
 
     name: str
-    baseline_mean_us: float
-    current_mean_us: float
+    baseline_median_us: float
+    current_median_us: float
     change_percent: float
     is_regression: bool
     significance: str  # "significant", "marginal", "none"
@@ -467,6 +536,8 @@ def compare_results(
     marginal_threshold: float = 5.0,
 ) -> dict[str, ComparisonResult]:
     """Compare two benchmark results to detect regressions.
+
+    Uses median for comparison as it's more robust to outliers.
 
     Args:
         baseline: Baseline results (filepath or BenchmarkSuiteResult).
@@ -490,11 +561,11 @@ def compare_results(
             continue
 
         baseline_result = baseline.results[name]
-        baseline_mean = baseline_result.mean_us
-        current_mean = current_result.mean_us
+        baseline_median = baseline_result.median_us
+        current_median = current_result.median_us
 
-        if baseline_mean > 0:
-            change_percent = ((current_mean - baseline_mean) / baseline_mean) * 100
+        if baseline_median > 0:
+            change_percent = ((current_median - baseline_median) / baseline_median) * 100
         else:
             change_percent = 0.0
 
@@ -511,8 +582,8 @@ def compare_results(
 
         comparisons[name] = ComparisonResult(
             name=name,
-            baseline_mean_us=baseline_mean,
-            current_mean_us=current_mean,
+            baseline_median_us=baseline_median,
+            current_median_us=current_median,
             change_percent=change_percent,
             is_regression=is_regression,
             significance=significance,
@@ -554,8 +625,8 @@ def format_comparison_table(
 
         change_str = f"{comp.change_percent:+.1f}%"
         lines.append(
-            f"{comp.name:<35} {comp.baseline_mean_us:>10.1f}µs "
-            f"{comp.current_mean_us:>10.1f}µs {change_str:>12} {comp.status_emoji:>6}"
+            f"{comp.name:<35} {comp.baseline_median_us:>10.1f}µs "
+            f"{comp.current_median_us:>10.1f}µs {change_str:>12} {comp.status_emoji:>6}"
         )
 
     if not any(c.is_regression for c in comparisons.values()):
@@ -590,13 +661,13 @@ def format_results_table(results: BenchmarkSuiteResult) -> str:
         f"Git commit: {results.git_commit or 'N/A'}",
         f"Python: {results.python_version} | Platform: {results.platform_info}",
         "=" * 90,
-        f"{'Benchmark':<35} {'Mean':>12} {'Median':>12} {'StdDev':>10} {'p95':>12} {'ops/s':>12}",
+        f"{'Benchmark':<35} {'Median':>12} {'Mean':>12} {'StdDev':>10} {'p95':>12} {'ops/s':>12}",
         "-" * 90,
     ]
 
     for name, result in sorted(results.results.items()):
         lines.append(
-            f"{name:<35} {result.mean_us:>10.1f}µs {result.median_us:>10.1f}µs "
+            f"{name:<35} {result.median_us:>10.1f}µs {result.mean_us:>10.1f}µs "
             f"{result.std_dev_us:>8.1f}µs {result.p95_us:>10.1f}µs {result.ops_per_sec:>10.0f}"
         )
 

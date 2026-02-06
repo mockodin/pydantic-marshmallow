@@ -17,10 +17,31 @@ from pydantic_core import PydanticUndefined
 from .type_mapping import type_to_marshmallow_field
 
 
+def _get_computed_fields(model_class: type[BaseModel]) -> dict[str, Any]:
+    """Get computed fields dict from a Pydantic model class.
+
+    Handles differences between Pydantic versions:
+    - Pydantic 2.0.x: model_computed_fields is a property (only works on instances)
+    - Pydantic 2.4+: model_computed_fields works directly on classes
+    """
+    # Try direct access first (works in newer Pydantic)
+    result = getattr(model_class, 'model_computed_fields', None)
+    if isinstance(result, dict):
+        return result
+
+    # For Pydantic 2.0.x: model_computed_fields is a property, call its getter
+    if isinstance(result, property) and result.fget:
+        prop_result = result.fget(model_class)
+        if isinstance(prop_result, dict):
+            return prop_result
+
+    return {}
+
+
 def convert_pydantic_field(
     field_name: str,
     field_info: Any,
-) -> ma_fields.Field:
+) -> ma_fields.Field[Any]:
     """
     Convert a single Pydantic FieldInfo to a Marshmallow Field.
 
@@ -70,7 +91,7 @@ def convert_pydantic_field(
 def convert_computed_field(
     field_name: str,
     computed_info: Any,
-) -> ma_fields.Field:
+) -> ma_fields.Field[Any]:
     """
     Convert a Pydantic computed_field to a dump-only Marshmallow Field.
 
@@ -93,7 +114,7 @@ def convert_model_fields(
     include: set[str] | None = None,
     exclude: set[str] | None = None,
     include_computed: bool = True,
-) -> dict[str, ma_fields.Field]:
+) -> dict[str, ma_fields.Field[Any]]:
     """
     Convert all fields from a Pydantic model to Marshmallow fields.
 
@@ -111,7 +132,7 @@ def convert_model_fields(
     Returns:
         Dict mapping field names to Marshmallow field instances
     """
-    fields: dict[str, ma_fields.Field] = {}
+    fields: dict[str, ma_fields.Field[Any]] = {}
     exclude_set = exclude or set()
 
     # Convert regular model fields
@@ -125,8 +146,9 @@ def convert_model_fields(
         fields[field_name] = convert_pydantic_field(field_name, field_info)
 
     # Convert computed fields (dump-only)
-    if include_computed and hasattr(model, 'model_computed_fields'):
-        for field_name, computed_info in model.model_computed_fields.items():
+    computed_fields = _get_computed_fields(model)
+    if include_computed and computed_fields:
+        for field_name, computed_info in computed_fields.items():
             if field_name in exclude_set:
                 continue
             if include is not None and field_name not in include:

@@ -150,11 +150,22 @@ class BridgeValidationError(ValidationError):
 
 ### Benchmarking
 
+**See [Performance.instructions.md](Performance.instructions.md) for full guidelines.**
+
+**Critical:** Always verify dependency versions before benchmarking:
+```python
+# ALWAYS run this before any benchmark
+python -c "import marshmallow; print(marshmallow.__file__); from importlib.metadata import version; print('Version:', version('marshmallow'))"
+```
+
+Basic benchmark example:
 ```python
 # In benchmarks/
-from benchmark_framework import benchmark, compare_baseline
+from benchmark_framework import BenchmarkSuite
 
-@benchmark(iterations=1000)
+suite = BenchmarkSuite("my_benchmarks", iterations=1000, runs=3)
+
+@suite.add("bench_simple_load")
 def bench_simple_load():
     schema.load({"name": "test", "age": 30})
 ```

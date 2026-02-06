@@ -3,8 +3,8 @@
 This document maps features from both libraries and tracks bridge support.
 
 **Last Updated**: February 2026  
-**Tested Versions**: Marshmallow 3.x, Pydantic 2.x  
-**Test Suite**: 375+ tests
+**Tested Versions**: Marshmallow 3.x/4.x, Pydantic 2.x  
+**Test Suite**: 515+ tests
 
 ## Legend
 - ✅ Fully supported and tested
@@ -296,12 +296,16 @@ This document maps features from both libraries and tracks bridge support.
 
 | Tool | Status | Notes |
 |:-----|:------:|:------|
-| Flask-Rebar | ✅ | Schema subclass |
+| Flask-Rebar | ✅ | Schema subclass; requires ≥3.4.0 for MA 4.x swagger |
 | webargs | ✅ | Schema subclass |
 | apispec | ✅ | Schema subclass |
 | Flask-Marshmallow | ✅ | Schema subclass |
 | Flask-Smorest | ✅ | Schema subclass |
 | marshmallow-sqlalchemy | ✅ | Works alongside |
+
+#### Flask-Rebar Version Notes
+- **flask-rebar ≥ 3.4.0**: Full support for Marshmallow 4.x including swagger generation
+- **flask-rebar < 3.4.0**: Works with Marshmallow 3.x; swagger generation fails on MA 4.x due to removed `ordered` attribute
 
 ---
 
@@ -309,6 +313,10 @@ This document maps features from both libraries and tracks bridge support.
 
 | pydantic-marshmallow | Marshmallow | Pydantic | Python |
 |:---------------------|:------------|:---------|:-------|
-| 0.1.x | 3.18+ | 2.0+ | 3.9-3.14 |
+| 0.1.x | 3.18+ / 4.x | 2.0+ | 3.10-3.14 |
 
-**CI tests against:** Python 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 on Ubuntu/Windows/macOS
+**Marshmallow Version Notes:**
+- **MA 3.x**: Full feature support including `context` parameter
+- **MA 4.x**: Full support; `context` parameter removed (use `contextvars` instead)
+
+**CI tests against:** Python 3.10, 3.11, 3.12, 3.13, 3.14 on Ubuntu/Windows/macOS

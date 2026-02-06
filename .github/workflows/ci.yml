@@ -28,9 +28,6 @@ jobs:
       - name: Lint with ruff
         run: uv run ruff check src/pydantic_marshmallow/ tests/
 
-      - name: Lint with flake8
-        run: uv run flake8 src/pydantic_marshmallow/ tests/
-
       - name: Type check with mypy
         run: uv run mypy src/pydantic_marshmallow/
 
@@ -114,19 +111,40 @@ jobs:
 
       - name: Override Marshmallow to 4.x latest
         if: matrix.marshmallow-version == '4-latest'
-        run: uv pip install --upgrade "marshmallow>=4.0.0"
+        run: uv add --dev "marshmallow>=4.0.0"
+
+      - name: Upgrade flask-rebar for Marshmallow 4.x compatibility
+        if: matrix.marshmallow-version == '4-latest'
+        run: uv add --dev "flask-rebar>=3.4.0"
 
       - name: Override Marshmallow to specific version
         if: matrix.marshmallow-version != 'latest' && matrix.marshmallow-version != '4-latest'
-        run: uv pip install "marshmallow==${{ matrix.marshmallow-version }}"
+        run: uv add --dev "marshmallow==${{ matrix.marshmallow-version }}"
 
       - name: Override Pydantic to 2.5.x
         if: matrix.pydantic-version == '2.5'
-        run: uv pip install "pydantic>=2.5.0,<2.6.0"
+        run: uv add --dev "pydantic>=2.5.0,<2.6.0"
 
       - name: Override Pydantic to specific version
         if: matrix.pydantic-version == '2.0.0'
-        run: uv pip install "pydantic>=2.0.0,<2.1.0"
+        run: uv add --dev "pydantic>=2.0.0,<2.1.0"
+
+      - name: Verify installed versions
+        run: |
+          echo "=== Installed Versions ==="
+          uv run python -c "from importlib.metadata import version; print(f'Marshmallow: {version(\"marshmallow\")}')"
+          uv run python -c "from importlib.metadata import version; print(f'Pydantic: {version(\"pydantic\")}')"
+          uv run python -c "import sys; print(f'Python: {sys.version}')"
+
+      - name: Verify Marshmallow 4.x installed
+        if: matrix.marshmallow-version == '4-latest'
+        run: |
+          uv run python -c "from importlib.metadata import version; v = version('marshmallow'); assert v.startswith('4.'), f'Expected MA 4.x, got {v}'"
+
+      - name: Verify Marshmallow 3.x installed
+        if: matrix.marshmallow-version == '3.18.0' || matrix.marshmallow-version == '3.21.0'
+        run: |
+          uv run python -c "from importlib.metadata import version; v = version('marshmallow'); assert v == '${{ matrix.marshmallow-version }}', f'Expected MA ${{ matrix.marshmallow-version }}, got {v}'"
 
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
