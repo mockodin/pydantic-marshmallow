@@ -10,6 +10,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable, Sequence, Set as AbstractSet
 from functools import lru_cache
+from importlib.metadata import version as get_version
 from typing import Any, ClassVar, Generic, TypeVar, cast, get_args, get_origin
 
 from marshmallow import EXCLUDE, INCLUDE, RAISE, Schema, fields as ma_fields
@@ -17,12 +18,28 @@ from marshmallow.decorators import VALIDATES, VALIDATES_SCHEMA
 from marshmallow.error_store import ErrorStore
 from marshmallow.exceptions import ValidationError as MarshmallowValidationError
 from marshmallow.schema import SchemaMeta
-from marshmallow.utils import missing as ma_missing
+from marshmallow.utils import missing as ma_missing  # type: ignore[attr-defined,unused-ignore]
 from pydantic import BaseModel, ConfigDict, ValidationError as PydanticValidationError
 
 from .errors import BridgeValidationError, convert_pydantic_errors, format_pydantic_error
-from .field_conversion import convert_model_fields, convert_pydantic_field
+from .field_conversion import _get_computed_fields, convert_model_fields, convert_pydantic_field
 from .validators import cache_validators
+
+
+# Marshmallow version detection for context parameter compatibility
+# MA 4.x removes the `context` parameter from Schema.__init__
+def _parse_version(version_str: str) -> tuple[int, int]:
+    """Parse version string, handling pre-release versions like '4.0.0rc1'."""
+    import re
+    match = re.match(r'(\d+)\.(\d+)', version_str)
+    if match:
+        return (int(match.group(1)), int(match.group(2)))
+    raise ValueError(f"Cannot parse marshmallow version: {version_str}")  # pragma: no cover
+
+
+_MARSHMALLOW_VERSION = _parse_version(get_version("marshmallow"))
+_MARSHMALLOW_4_PLUS = _MARSHMALLOW_VERSION >= (4, 0)
+
 
 M = TypeVar("M", bound=BaseModel)
 
@@ -170,10 +187,11 @@ class PydanticSchemaMeta(SchemaMeta):
                 attrs[field_name] = convert_pydantic_field(field_name, field_info)
 
             # Add computed fields as dump_only
-            if hasattr(model_class, 'model_computed_fields'):
+            computed_fields = _get_computed_fields(model_class)
+            if computed_fields:
                 from .field_conversion import convert_computed_field
 
-                for field_name, computed_info in model_class.model_computed_fields.items():
+                for field_name, computed_info in computed_fields.items():
                     if field_name in attrs:
                         continue
                     # If attrs has pre-filtered fields, don't add computed fields
@@ -189,7 +207,7 @@ class PydanticSchemaMeta(SchemaMeta):
         return cast(PydanticSchemaMeta, super().__new__(mcs, name, bases, attrs))
 
 
-class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
+class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
     """
     A Marshmallow schema backed by a Pydantic model.
 
@@ -268,20 +286,27 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         self._dump_only_fields: set[str] = set(dump_only) if dump_only else set()
         self._partial: bool | Sequence[str] | AbstractSet[str] | None = partial
         self._unknown_override: str | None = unknown
-        self._context = context or {}
 
-        # Pass all known kwargs to parent including context
-        super().__init__(
-            only=only,
-            exclude=exclude,
-            context=context,
-            many=many,
-            load_only=load_only,
-            dump_only=dump_only,
-            partial=partial,
-            unknown=unknown,
+        # Build kwargs for super().__init__()
+        # MA 4.x removes context parameter - only pass it for MA 3.x
+        parent_kwargs: dict[str, Any] = {
+            "only": only,
+            "exclude": exclude,
+            "many": many,
+            "load_only": load_only,
+            "dump_only": dump_only,
+            "partial": partial,
+            "unknown": unknown,
             **kwargs,
-        )
+        }
+        if not _MARSHMALLOW_4_PLUS:
+            parent_kwargs["context"] = context
+
+        super().__init__(**parent_kwargs)
+
+        # For MA 4.x, store context manually if provided
+        if _MARSHMALLOW_4_PLUS and context is not None:  # pragma: no cover
+            self.context = context
         self._model_class = self._get_model_class()
         if self._model_class:
             self._setup_fields_from_model()
@@ -290,7 +315,7 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         for field_name, field_obj in self.fields.items():
             self.on_bind_field(field_name, field_obj)
 
-    def on_bind_field(self, field_name: str, field_obj: ma_fields.Field) -> None:
+    def on_bind_field(self, field_name: str, field_obj: Any) -> None:
         """
         Hook called when a field is bound to the schema.
 
@@ -339,16 +364,6 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                     raise error
         """
         raise error
-
-    @property
-    def context(self) -> dict[str, Any]:
-        """Get the validation context."""
-        return self._context
-
-    @context.setter
-    def context(self, value: dict[str, Any]) -> None:
-        """Set the validation context."""
-        self._context = value
 
     def _get_model_class(self) -> type[BaseModel] | None:
         """Get the Pydantic model class from Meta or generic parameter."""
@@ -616,7 +631,9 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         if many:
             if not isinstance(data, list):
                 raise MarshmallowValidationError({"_schema": ["Expected a list."]})
-            return [
+
+            # Process each item individually (validators run per-item with pass_many=False)
+            results = [
                 self._do_load(
                     item,
                     many=False,
@@ -628,18 +645,47 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                 for item in data
             ]
 
-        # Step 1: Run pre_load hooks ONLY if they exist (PERFORMANCE OPTIMIZATION)
-        # Skipping _invoke_load_processors when empty saves ~5ms per 10k loads
-        if hooks.get("pre_load"):
-            processed_data_raw = self._invoke_load_processors(
-                "pre_load",
-                data,
-                many=False,
-                original_data=data,
-                partial=partial,
-            )
-        else:
-            processed_data_raw = data
+            # After all items processed, run @validates_schema(pass_many=True) validators
+            # These should see the FULL collection, not individual items
+            coll_error_store_cls: Callable[[], Any] = cast(Callable[[], Any], ErrorStore)
+            coll_error_store: Any = coll_error_store_cls()
+
+            # Build kwargs for collection-level validation
+            coll_pass_param = "pass_collection" if _MARSHMALLOW_4_PLUS else "pass_many"
+            coll_validator_kwargs: dict[str, Any] = {
+                "error_store": coll_error_store,
+                "data": results,
+                "original_data": data,
+                "many": True,
+                "partial": partial,
+                "field_errors": False,  # Field errors already handled per-item
+            }
+            # MA 4.x requires 'unknown' parameter
+            if _MARSHMALLOW_4_PLUS:  # pragma: no cover
+                coll_validator_kwargs["unknown"] = unknown_setting
+            # Only run pass_many=True validators (collection-level)
+            self._invoke_schema_validators(**{coll_pass_param: True, **coll_validator_kwargs})
+
+            if coll_error_store.errors:
+                error = MarshmallowValidationError(dict(coll_error_store.errors))
+                self.handle_error(error, data, many=True)
+
+            return results
+
+        # Step 1: Run pre_load hooks
+        # MA 4.x requires 'unknown' parameter, MA 3.x doesn't accept it
+        pre_load_kwargs: dict[str, Any] = {
+            "many": False,
+            "original_data": data,
+            "partial": partial,
+        }
+        if _MARSHMALLOW_4_PLUS:  # pragma: no cover
+            pre_load_kwargs["unknown"] = unknown_setting
+        processed_data_raw = self._invoke_load_processors(
+            "pre_load",
+            data,
+            **pre_load_kwargs,
+        )
 
         # Type narrowing: at this point (many=False path), data is always a dict
         processed_data: dict[str, Any] = cast(dict[str, Any], processed_data_raw)
@@ -669,9 +715,25 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
 
         # OPTIMIZATION: Determine if we need model_dump() for validators/result
         # Skip expensive model_dump() when not needed
+        # Note: MA 3.x uses tuple keys ('validates', field) and ('validates_schema', pass_many)
+        # MA 4.x uses string keys ('validates', 'validates_schema')
+        # Check for any hook that starts with the validator type
+        def _has_hook(hook_type: str) -> bool:
+            """Check if any hook matches the type (handles both MA 3.x and 4.x key formats)."""
+            # Check string key (MA 4.x) - safe to access defaultdict
+            if hooks.get(hook_type):
+                return True
+            # Check tuple keys (MA 3.x) - cast to Any to avoid mypy narrowing issues
+            # across different Marshmallow versions with different key types
+            hooks_any: dict[Any, Any] = cast(dict[Any, Any], hooks)
+            for key in hooks_any:
+                if isinstance(key, tuple) and len(key) >= 1 and key[0] == hook_type and hooks_any[key]:
+                    return True
+            return False
+
         has_validators = bool(
-            hooks[VALIDATES]
-            or hooks[VALIDATES_SCHEMA]
+            _has_hook(VALIDATES)
+            or _has_hook(VALIDATES_SCHEMA)
             or self._field_validators_cache
             or self._schema_validators_cache
         )
@@ -709,12 +771,11 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         error_store: Any = error_store_cls()
 
         # 4a: Run Marshmallow's native @validates decorators (from hooks)
-        if hooks[VALIDATES]:
-            self._invoke_field_validators(
-                error_store=error_store,
-                data=validated_data,
-                many=False,
-            )
+        self._invoke_field_validators(
+            error_store=error_store,
+            data=validated_data,
+            many=False,
+        )
 
         # 4b: Run our custom @validates decorators (backwards compatibility)
         try:
@@ -729,25 +790,25 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
 
         # Step 5: Run schema validators (BOTH Marshmallow native AND our custom)
         # 5a: Run Marshmallow's native @validates_schema decorators
-        if hooks[VALIDATES_SCHEMA]:
-            self._invoke_schema_validators(
-                error_store=error_store,
-                pass_many=True,
-                data=validated_data,
-                original_data=data,
-                many=False,
-                partial=partial,
-                field_errors=has_field_errors,
-            )
-            self._invoke_schema_validators(
-                error_store=error_store,
-                pass_many=False,
-                data=validated_data,
-                original_data=data,
-                many=False,
-                partial=partial,
-                field_errors=has_field_errors,
-            )
+        # MA 4.x renamed pass_many -> pass_collection
+        # Build common kwargs
+        validator_kwargs: dict[str, Any] = {
+            "error_store": error_store,
+            "data": validated_data,
+            "original_data": data,
+            "many": False,
+            "partial": partial,
+            "field_errors": has_field_errors,
+        }
+        # MA 4.x requires 'unknown' parameter
+        if _MARSHMALLOW_4_PLUS:  # pragma: no cover
+            validator_kwargs["unknown"] = unknown_setting
+        # Pass the correctly-named parameter for the marshmallow version
+        pass_param = "pass_collection" if _MARSHMALLOW_4_PLUS else "pass_many"
+
+        # Only run pass_many=False validators in per-item mode
+        # pass_many=True validators are handled at the collection level (in many=True block above)
+        self._invoke_schema_validators(**{pass_param: False, **validator_kwargs})
 
         # 5b: Run our custom @validates_schema decorators (backwards compatibility)
         try:
@@ -797,14 +858,20 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
             # Return dict instead of instance
             result = validated_data
 
-        # Step 7: Run post_load hooks ONLY if they exist (PERFORMANCE OPTIMIZATION)
-        if postprocess and hooks.get("post_load"):
+        # Step 7: Run post_load hooks
+        if postprocess:
+            # MA 4.x requires 'unknown' parameter, MA 3.x doesn't accept it
+            post_load_kwargs: dict[str, Any] = {
+                "many": False,
+                "original_data": data,
+                "partial": partial,
+            }
+            if _MARSHMALLOW_4_PLUS:  # pragma: no cover
+                post_load_kwargs["unknown"] = unknown_setting
             result = self._invoke_load_processors(
                 "post_load",
-                result,
-                many=False,
-                original_data=data,
-                partial=partial,
+                cast(dict[str, Any], result),
+                **post_load_kwargs,
             )
 
         return result
@@ -1048,8 +1115,9 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                         fields_to_exclude.add(field_name)
 
             # Extract computed field values BEFORE converting to dict
-            if include_computed and hasattr(model_class, 'model_computed_fields'):
-                for field_name in model_class.model_computed_fields:
+            computed_fields = _get_computed_fields(model_class)
+            if include_computed and computed_fields:
+                for field_name in computed_fields:
                     value = getattr(obj, field_name)
                     # Apply exclusion rules to computed fields too
                     if exclude_none and value is None:
@@ -1157,6 +1225,66 @@ class PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                 _schema_class_cache[cache_key] = schema_cls
 
         return schema_cls
+
+
+if _MARSHMALLOW_4_PLUS:  # pragma: no cover
+    class PydanticSchema(_PydanticSchema[M], Generic[M]):
+        def __init__(
+            self,
+            *,
+            only: Sequence[str] | None = None,
+            exclude: Sequence[str] = (),
+            load_only: Sequence[str] = (),
+            dump_only: Sequence[str] = (),
+            partial: bool | Sequence[str] | AbstractSet[str] | None = None,
+            unknown: str | None = None,
+            many: bool | None = None,
+            **kwargs: Any,
+        ) -> None:
+            # MA 4.x removed context parameter - reject it to match native behavior
+            if "context" in kwargs:
+                raise TypeError(
+                    "PydanticSchema.__init__() got an unexpected keyword argument 'context'. "
+                    "The context parameter was removed in Marshmallow 4.x. "
+                    "Use contextvars.ContextVar instead."
+                )
+            super().__init__(
+                only=only,
+                exclude=exclude,
+                load_only=load_only,
+                dump_only=dump_only,
+                partial=partial,
+                unknown=unknown,
+                many=many,
+                **kwargs,
+            )
+else:
+    class PydanticSchema(_PydanticSchema[M], Generic[M]):  # type: ignore[no-redef]
+        def __init__(
+            self,
+            *,
+            only: Sequence[str] | None = None,
+            exclude: Sequence[str] = (),
+            context: dict[str, Any] | None = None,
+            load_only: Sequence[str] = (),
+            dump_only: Sequence[str] = (),
+            partial: bool | Sequence[str] | AbstractSet[str] | None = None,
+            unknown: str | None = None,
+            many: bool | None = None,
+            **kwargs: Any,
+        ) -> None:
+            # Pass context to super so Marshmallow sets self.context correctly
+            super().__init__(
+                only=only,
+                exclude=exclude,
+                context=context,
+                load_only=load_only,
+                dump_only=dump_only,
+                partial=partial,
+                unknown=unknown,
+                many=many,
+                **kwargs,
+            )
 
 
 def schema_for(model: type[M], **meta_options: Any) -> type[PydanticSchema[M]]:

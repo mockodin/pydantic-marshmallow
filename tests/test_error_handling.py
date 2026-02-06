@@ -12,11 +12,7 @@ import pytest
 from marshmallow.exceptions import ValidationError
 from pydantic import BaseModel, Field
 
-from pydantic_marshmallow import (
-    BridgeValidationError,
-    PydanticSchema,
-    schema_for,
-)
+from pydantic_marshmallow import BridgeValidationError, PydanticSchema, schema_for
 
 # =============================================================================
 # Test Models
