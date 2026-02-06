@@ -23,16 +23,7 @@ from typing import Annotated, Generic, Literal, TypeVar
 
 import pytest
 from marshmallow import EXCLUDE, INCLUDE, ValidationError, pre_load, validates, validates_schema
-from pydantic import (
-    BaseModel,
-    EmailStr,
-    Field,
-    NegativeFloat,
-    PositiveInt,
-    SecretStr,
-    field_validator,
-    model_validator,
-)
+from pydantic import BaseModel, EmailStr, Field, NegativeFloat, PositiveInt, SecretStr, field_validator, model_validator
 
 from pydantic_marshmallow import PydanticSchema, schema_for
 

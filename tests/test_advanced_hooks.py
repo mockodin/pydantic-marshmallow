@@ -13,12 +13,7 @@ from marshmallow import fields as ma_fields
 from marshmallow.exceptions import ValidationError
 from pydantic import BaseModel, Field
 
-from pydantic_marshmallow import (
-    PydanticSchema,
-    schema_for,
-    validates,
-    validates_schema,
-)
+from pydantic_marshmallow import PydanticSchema, schema_for, validates, validates_schema
 
 # =============================================================================
 # Test Models

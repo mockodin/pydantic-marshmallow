@@ -15,16 +15,27 @@ Get the best of both worlds: **Pydantic's speed** with **Marshmallow's ecosystem
 
 ### Performance
 
-pydantic-marshmallow uses Pydantic's Rust-powered validation engine under the hood, delivering significant performance improvements over native Marshmallow—especially for nested data structures:
+pydantic-marshmallow uses Pydantic's Rust-powered validation engine under the hood, delivering significant performance improvements over native Marshmallow—especially for nested data structures.
 
-| Operation | pydantic-marshmallow | Marshmallow | Speedup |
-|-----------|---------------------|-------------|---------|
-| Simple load | 3.0 µs | 5.3 µs | **1.8x faster** |
-| Nested model | 3.5 µs | 11.6 µs | **3.3x faster** |
-| Deep nested (4 levels) | 5.6 µs | 32.3 µs | **5.8x faster** |
-| Batch (100 items) | 255 µs | 474 µs | **1.9x faster** |
+#### Performance Comparison
 
-*Benchmarks run on Python 3.11. Run `python -m benchmarks.run_benchmarks` to reproduce.*
+| Operation | MA 3.x | MA 4.x | Bridge (MA 3.x) | Bridge (MA 4.x) |
+|-----------|--------|--------|-----------------|-----------------|
+| Simple load | 5.3 µs | 4.8 µs | 2.9 µs | 2.9 µs |
+| Nested model | 10.9 µs | 10.5 µs | 3.4 µs | 3.2 µs |
+| Deep nested (4 levels) | 31.2 µs | 29.0 µs | 5.3 µs | 5.2 µs |
+| Batch (100 items) | 454 µs | 424 µs | 260 µs | 259 µs |
+
+#### What the Numbers Show
+
+1. **MA 3.x → MA 4.x**: Marshmallow 4.x improved ~10% over 3.x (5.3 → 4.8 µs for simple loads)
+2. **MA 3.x → Bridge**: Adding Pydantic delivers **1.8x–5.9x speedup** over pure MA 3.x
+3. **MA 4.x → Bridge**: Still **1.6x–5.6x faster** than native MA 4.x
+4. **Bridge consistency**: ~2.9 µs for simple loads regardless of Marshmallow version
+
+The bridge delegates validation to Pydantic's Rust-powered core, bypassing Marshmallow's field processing. This means bridge performance is **independent of Marshmallow version**—you get consistent speed whether you're on MA 3.x or 4.x.
+
+*Benchmarks: Python 3.11, median of 3 runs with IQR outlier removal. Run `python -m benchmarks.run_benchmarks` to reproduce.*
 
 ### Why it matters
 
@@ -48,6 +59,8 @@ pydantic-marshmallow uses Pydantic's Rust-powered validation engine under the ho
 ```bash
 pip install pydantic-marshmallow
 ```
+
+**Requirements:** Python 3.10+, Pydantic 2.0+, Marshmallow 3.18+ (including 4.x)
 
 ## Quick Start
 

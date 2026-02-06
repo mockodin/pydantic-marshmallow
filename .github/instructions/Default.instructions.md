@@ -35,6 +35,7 @@ ruff format src/ tests/
 **Before committing:** Run `pytest tests/ -v && mypy src/ && ruff check src/ tests/`
 
 See [Git.instructions.md](Git.instructions.md) for full CI/CD workflow.
+See [Performance.instructions.md](Performance.instructions.md) for benchmark guidelines.
 
 ## Architecture
 
@@ -132,9 +133,34 @@ This ensures field filtering works correctly with dynamically generated fields.
 
 **Runtime:**
 - pydantic >= 2.0
-- marshmallow >= 3.18
+- marshmallow >= 3.18 (supports both 3.x and 4.x)
 
 **Development:**
 - pytest, pytest-cov
 - mypy
 - ruff
+
+## Marshmallow Version Compatibility
+
+The library supports both Marshmallow 3.x and 4.x. Key differences handled internally:
+- **MA 4.x**: `context` parameter removed from `Schema.__init__` (use `contextvars` instead)
+- **MA 4.x**: `@validates_schema(pass_many=True)` renamed to `pass_collection=True`
+- **MA 4.x**: `unknown` parameter required in internal processor methods
+
+**Testing both versions locally:**
+```bash
+# Create separate venvs
+python -m venv .venv-ma3
+python -m venv .venv-ma4
+
+# Install with specific versions
+.\.venv-ma3\Scripts\pip install -e ".[dev]" "marshmallow>=3.18,<4"
+.\.venv-ma4\Scripts\pip install -e ".[dev]" "marshmallow>=4" "flask-rebar>=3.4.0"
+
+# Run tests
+.\.venv-ma3\Scripts\python -m pytest tests/ -v
+.\.venv-ma4\Scripts\python -m pytest tests/ -v
+```
+
+**Ecosystem version requirements:**
+- flask-rebar ≥ 3.4.0 required for MA 4.x swagger generation support

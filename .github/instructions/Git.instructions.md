@@ -38,9 +38,9 @@ ruff check src/ tests/
 1. **Push changes** - Never merge uncommitted work
 2. **Wait for CI** - Check GitHub Actions status
 3. **All checks must pass**:
-   - Tests pass on Python 3.9, 3.10, 3.11, 3.12, 3.13, 3.14
+   - Tests pass on Python 3.10, 3.11, 3.12, 3.13, 3.14
    - mypy type checking passes
-   - ruff and flake8 linting passes
+   - ruff linting passes
 4. **Only merge after CI success** - The `ci-passed` job gates all merges
 
 ## Checking CI Status

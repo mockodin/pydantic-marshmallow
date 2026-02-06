@@ -10,16 +10,23 @@ from marshmallow import Schema
 from pydantic import BaseModel, Field, field_validator
 
 from pydantic_marshmallow import schema_for
+from pydantic_marshmallow.bridge import _MARSHMALLOW_4_PLUS
 
 # Third-party imports with conditional availability
 try:
+    from importlib.metadata import version as get_version
+
     from flask import Flask
     from flask_rebar import Rebar, ResponseSchema as RebarResponseSchema
     from flask_rebar.validation import RequestSchema
 
     FLASK_REBAR_AVAILABLE = True
+    # flask-rebar >= 3.4 supports marshmallow 4.x swagger generation
+    _flask_rebar_version = tuple(int(x) for x in get_version("flask-rebar").split(".")[:2])
+    FLASK_REBAR_MA4_COMPATIBLE = _flask_rebar_version >= (3, 4)
 except ImportError:
     FLASK_REBAR_AVAILABLE = False
+    FLASK_REBAR_MA4_COMPATIBLE = False
 
 pytestmark = pytest.mark.skipif(
     not FLASK_REBAR_AVAILABLE, reason="flask-rebar not installed"
@@ -276,6 +283,10 @@ class TestRequestValidation:
         assert response.status_code == 200
 
 
+@pytest.mark.skipif(
+    _MARSHMALLOW_4_PLUS and not FLASK_REBAR_MA4_COMPATIBLE,
+    reason="flask-rebar < 3.4 does not support marshmallow 4.x swagger generation",
+)
 class TestSwaggerGeneration:
     """Test Swagger/OpenAPI generation with flask-rebar."""
 

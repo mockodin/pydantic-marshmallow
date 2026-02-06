@@ -4,6 +4,9 @@ Type mapping utilities for converting Python/Pydantic types to Marshmallow field
 This module provides type-to-field conversions, leveraging Marshmallow's native
 TYPE_MAPPING for basic types and adding support for generic collections.
 """
+
+from __future__ import annotations
+
 from enum import Enum as PyEnum
 from functools import lru_cache
 from types import UnionType
@@ -20,7 +23,7 @@ _processing_models: set[type[Any]] = set()
 # These are the most common types and benefit most from caching.
 # maxsize=512 handles large codebases with ~80KB memory overhead.
 @lru_cache(maxsize=512)
-def _get_simple_field_class(type_hint: type) -> type[ma_fields.Field]:
+def _get_simple_field_class(type_hint: type) -> type[Any]:
     """
     Cached lookup for simple, hashable types in Marshmallow's TYPE_MAPPING.
 
@@ -30,7 +33,7 @@ def _get_simple_field_class(type_hint: type) -> type[ma_fields.Field]:
     return Schema.TYPE_MAPPING.get(type_hint, ma_fields.Raw)
 
 
-def type_to_marshmallow_field(type_hint: Any) -> ma_fields.Field:
+def type_to_marshmallow_field(type_hint: Any) -> Any:
     """
     Map a Python type to a Marshmallow field instance.
 
@@ -88,40 +91,47 @@ def type_to_marshmallow_field(type_hint: Any) -> ma_fields.Field:
         return ma_fields.Raw(allow_none=True)
 
     # Handle Enum types
-    if isinstance(type_hint, type) and issubclass(type_hint, PyEnum):
-        return ma_fields.Enum(type_hint)
+    # Use try-except because some type hints pass isinstance(x, type) but fail issubclass()
+    try:
+        if isinstance(type_hint, type) and issubclass(type_hint, PyEnum):
+            return ma_fields.Enum(type_hint)
+    except TypeError:
+        pass  # Not a valid class for issubclass check
 
     # Handle nested Pydantic models - use Nested with a dynamically created schema
-    if isinstance(type_hint, type) and issubclass(type_hint, BaseModel):
-        # Import here to avoid circular imports
-        from pydantic_marshmallow.bridge import PydanticSchema
+    try:
+        if isinstance(type_hint, type) and issubclass(type_hint, BaseModel):
+            # Import here to avoid circular imports
+            from pydantic_marshmallow.bridge import PydanticSchema
 
-        # Check if we're already processing this model (recursion detection)
-        # Use a module-level set to track models being processed
-        if type_hint in _processing_models:
-            # Self-referential model - use Raw to avoid infinite recursion
-            # Pydantic will still handle the validation correctly
-            return ma_fields.Raw()
+            # Check if we're already processing this model (recursion detection)
+            # Use a module-level set to track models being processed
+            if type_hint in _processing_models:
+                # Self-referential model - use Raw to avoid infinite recursion
+                # Pydantic will still handle the validation correctly
+                return ma_fields.Raw()
 
-        try:
-            _processing_models.add(type_hint)
-            # Create a nested schema class for this model
-            nested_schema = PydanticSchema.from_model(type_hint)
-            return ma_fields.Nested(nested_schema)
-        finally:
-            _processing_models.discard(type_hint)
+            try:
+                _processing_models.add(type_hint)
+                # Create a nested schema class for this model
+                nested_schema = PydanticSchema.from_model(type_hint)
+                return ma_fields.Nested(nested_schema)
+            finally:
+                _processing_models.discard(type_hint)
+    except TypeError:
+        pass  # Not a valid class for issubclass check
 
     # Handle list[T]
     if origin is list:
-        inner: ma_fields.Field = ma_fields.Raw()
+        inner = ma_fields.Raw()
         if args:
             inner = type_to_marshmallow_field(args[0])
         return ma_fields.List(inner)
 
     # Handle dict[K, V]
     if origin is dict:
-        key_field: ma_fields.Field = ma_fields.String()
-        value_field: ma_fields.Field = ma_fields.Raw()
+        key_field = ma_fields.String()
+        value_field = ma_fields.Raw()
         if args and len(args) >= 2:
             key_field = type_to_marshmallow_field(args[0])
             value_field = type_to_marshmallow_field(args[1])
@@ -129,7 +139,7 @@ def type_to_marshmallow_field(type_hint: Any) -> ma_fields.Field:
 
     # Handle set[T] and frozenset[T] - convert to List in Marshmallow
     if origin in (set, frozenset):
-        inner_set: ma_fields.Field = ma_fields.Raw()
+        inner_set = ma_fields.Raw()
         if args:
             inner_set = type_to_marshmallow_field(args[0])
         return ma_fields.List(inner_set)
@@ -155,8 +165,7 @@ def type_to_marshmallow_field(type_hint: Any) -> ma_fields.Field:
         if any(ut in type_name for ut in url_types):
             return ma_fields.URL()
         if 'IP' in type_name:
-            # IP field exists in marshmallow but may not have type stubs
-            return ma_fields.IP()  # type: ignore[no-untyped-call]
+            return ma_fields.IP()  # type: ignore[no-untyped-call,unused-ignore]
 
     # Use Marshmallow's native TYPE_MAPPING for basic types
     # This ensures we stay in sync with Marshmallow's type handling

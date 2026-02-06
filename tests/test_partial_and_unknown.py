@@ -13,14 +13,8 @@ import pytest
 from marshmallow.exceptions import ValidationError
 from pydantic import BaseModel, EmailStr, Field
 
-from pydantic_marshmallow import (
-    EXCLUDE,
-    INCLUDE,
-    PydanticSchema,
-    schema_for,
-    validates,
-    validates_schema,
-)
+from pydantic_marshmallow import EXCLUDE, INCLUDE, PydanticSchema, schema_for, validates, validates_schema
+from pydantic_marshmallow.bridge import _MARSHMALLOW_4_PLUS
 
 
 # Test models
@@ -342,6 +336,10 @@ class TestValidateMethod:
 # Context Tests
 # =============================================================================
 
+@pytest.mark.skipif(
+    _MARSHMALLOW_4_PLUS,
+    reason="MA 4.x removed context parameter from Schema.__init__ - use contextvars instead"
+)
 class TestContextPassing:
     """Test context passing to validators."""
 
