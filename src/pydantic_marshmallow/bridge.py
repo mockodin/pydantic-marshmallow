@@ -22,7 +22,7 @@ from marshmallow.utils import missing as ma_missing  # type: ignore[attr-defined
 from pydantic import BaseModel, ConfigDict, ValidationError as PydanticValidationError
 
 from .errors import BridgeValidationError, convert_pydantic_errors, format_pydantic_error
-from .field_conversion import convert_model_fields, convert_pydantic_field
+from .field_conversion import _get_computed_fields, convert_model_fields, convert_pydantic_field
 from .validators import cache_validators
 
 
@@ -39,27 +39,6 @@ def _parse_version(version_str: str) -> tuple[int, int]:
 
 _MARSHMALLOW_VERSION = _parse_version(get_version("marshmallow"))
 _MARSHMALLOW_4_PLUS = _MARSHMALLOW_VERSION >= (4, 0)
-
-
-def _get_computed_fields(model_class: type[BaseModel]) -> dict[str, Any]:
-    """Get computed fields dict from a Pydantic model class.
-
-    Handles differences between Pydantic versions:
-    - Pydantic 2.0.x: model_computed_fields is a property (only works on instances)
-    - Pydantic 2.4+: model_computed_fields works directly on classes
-    """
-    # Try direct access first (works in newer Pydantic)
-    result = getattr(model_class, 'model_computed_fields', None)
-    if isinstance(result, dict):
-        return result
-
-    # For Pydantic 2.0.x: model_computed_fields is a property, call its getter
-    if isinstance(result, property) and result.fget:
-        prop_result = result.fget(model_class)
-        if isinstance(prop_result, dict):
-            return prop_result
-
-    return {}
 
 
 M = TypeVar("M", bound=BaseModel)
