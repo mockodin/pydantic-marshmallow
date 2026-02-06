@@ -141,6 +141,7 @@ celerybeat.pid
 env/
 venv/
 ENV/
+.venv-*/
 env.bak/
 venv.bak/
 
@@ -153,6 +154,9 @@ venv.bak/
 
 # mkdocs documentation
 /site
+
+# Docker (local dev only)
+docker/
 
 # mypy
 .mypy_cache/

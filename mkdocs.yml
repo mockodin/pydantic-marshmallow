@@ -76,7 +76,6 @@ nav:
     - Errors: api/errors.md
     - HybridModel: api/hybrid.md
   - Examples: examples.md
-  - Changelog: changelog.md
 
 extra:
   social:

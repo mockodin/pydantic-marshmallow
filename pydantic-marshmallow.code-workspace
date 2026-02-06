@@ -132,9 +132,45 @@
 					"-m",
 					"ruff",
 					"check",
+					"src/pydantic_marshmallow/",
+					"tests/"
+				],
+				"group": "build",
+				"problemMatcher": []
+			},
+			{
+				"label": "Type Check with Mypy",
+				"type": "shell",
+				"command": "${command:python.interpreterPath}",
+				"args": [
+					"-m",
+					"mypy",
 					"src/pydantic_marshmallow/"
 				],
 				"group": "build",
+				"problemMatcher": []
+			},
+			{
+				"label": "Lint All (Ruff + Mypy)",
+				"dependsOn": [
+					"Lint with Ruff",
+					"Type Check with Mypy"
+				],
+				"dependsOrder": "sequence",
+				"group": {
+					"kind": "build",
+					"isDefault": true
+				},
+				"problemMatcher": []
+			},
+			{
+				"label": "Pre-PR Check (Lint + Tests)",
+				"dependsOn": [
+					"Lint All (Ruff + Mypy)",
+					"Run Tests"
+				],
+				"dependsOrder": "sequence",
+				"group": "test",
 				"problemMatcher": []
 			},
 			{
