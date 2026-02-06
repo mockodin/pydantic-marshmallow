@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Michael Thomas"}
 ]
 keywords = ["pydantic", "marshmallow", "validation", "serialization", "type-hints"]
 classifiers = [
@@ -41,10 +41,9 @@ dev = [
     "pytest-cov>=5.0.0",
     "email-validator>=2.1.0",
     # Linting/typing
-    "mypy>=1.10.0",
-    "ruff>=0.4.0",
-    "flake8>=7.1.0",
-    "flake8-pyproject>=1.2.4",  # Enable flake8 to read pyproject.toml
+    "mypy==1.19.1",
+    "ruff==0.15.0",  # Fast linter that replaces flake8, isort, and more
+    "pre-commit>=4.2.0",  # Git hooks for automated linting
     # Third-party compatibility testing (all optional at runtime)
     "sqlalchemy>=2.0.30",
     "marshmallow-sqlalchemy>=1.1.0",
@@ -268,29 +267,6 @@ combine-as-imports = true
 # Bridge code has complex methods that handle many edge cases
 # Increasing to 40 to accommodate _do_load (33), type_to_marshmallow_field (22), etc.
 max-complexity = 40
-
-[tool.flake8]
-max-complexity = 40
-max-line-length = 120
-ignore = [
-    "E501",  # Line length handled by formatter
-    "E203",  # Whitespace before ':' - conflicts with black
-    "W503",  # Line break before binary operator
-]
-per-file-ignores = [
-    # Tests: allow unused imports/vars, flexible whitespace
-    "tests/*:F401,F841,E302,E303",
-    # __init__.py: allow unused imports (re-exports)
-    "*/__init__.py:F401",
-]
-exclude = [
-    ".git",
-    ".venv",
-    "__pycache__",
-    "build",
-    "dist",
-    "*.egg-info",
-]
 
 [dependency-groups]
 dev = [
