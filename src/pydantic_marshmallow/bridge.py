@@ -226,7 +226,7 @@ class PydanticSchemaMeta(SchemaMeta):
                     attrs[field_name] = convert_computed_field(field_name, computed_info)
 
         # Cast to satisfy type checker - SchemaMeta.__new__ returns SchemaMeta
-        return cast(PydanticSchemaMeta, super().__new__(mcs, name, bases, attrs))
+        return cast(PydanticSchemaMeta, super().__new__(mcs, name, bases, attrs))  # type: ignore[no-untyped-call,unused-ignore]
 
 
 class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
@@ -566,7 +566,7 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                     validation_data[field_name] = field_info.default
                 elif field_info.default_factory is not None:
                     # Cast to satisfy type checker - Pydantic's factory takes no args
-                    factory = cast(Callable[[], Any], field_info.default_factory)
+                    factory = cast(Callable[[], Any], field_info.default_factory)  # type: ignore[redundant-cast,unused-ignore]
                     validation_data[field_name] = factory()
                 # else: field is in partial_fields, we'll skip validation for it
 
@@ -867,7 +867,7 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                             construct_data[field_name] = field_info.default
                         elif field_info.default_factory is not None:
                             # Cast to satisfy type checker
-                            factory = cast(Callable[[], Any], field_info.default_factory)
+                            factory = cast(Callable[[], Any], field_info.default_factory)  # type: ignore[redundant-cast,unused-ignore]
                             construct_data[field_name] = factory()
                         else:
                             # No default - leave as None to avoid issues
@@ -1125,7 +1125,7 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                             fields_to_exclude.add(field_name)
                     elif field_info.default_factory is not None:
                         # Cast to satisfy type checker
-                        factory = cast(Callable[[], Any], field_info.default_factory)
+                        factory = cast(Callable[[], Any], field_info.default_factory)  # type: ignore[redundant-cast,unused-ignore]
                         default_val = factory()
                         if value == default_val:
                             fields_to_exclude.add(field_name)
@@ -1267,9 +1267,12 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
 
         schema_cls = type(name, (cls,), class_dict)
 
-        # Thread-safe cache write (supports free-threaded Python 3.14+)
+        # Thread-safe cache write with double-check (supports free-threaded Python 3.14+)
         if cache_key is not None:
             with _cache_lock:
+                cached = _schema_class_cache.get(cache_key)
+                if cached is not None:
+                    return cached
                 _schema_class_cache[cache_key] = schema_cls
 
         return schema_cls
