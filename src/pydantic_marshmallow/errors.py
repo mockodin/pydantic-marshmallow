@@ -36,8 +36,6 @@ class BridgeValidationError(MarshmallowValidationError):
         valid_data: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        self.data = data
-        self.valid_data = valid_data or {}
         super().__init__(message, field_name, data, valid_data=valid_data or {}, **kwargs)
 
 

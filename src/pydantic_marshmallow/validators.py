@@ -184,10 +184,7 @@ def cache_validators(cls: type[Any]) -> None:
     for attr_name in dir(cls):
         if attr_name.startswith('_'):
             continue
-        try:
-            attr = getattr(cls, attr_name, None)
-        except AttributeError:
-            continue
+        attr = getattr(cls, attr_name, None)
 
         if callable(attr):
             if hasattr(attr, "_validates_field"):
@@ -197,7 +194,7 @@ def cache_validators(cls: type[Any]) -> None:
                 if field not in field_cache:
                     field_cache[field] = []
                 field_cache[field].append(attr_name)
-            elif hasattr(attr, "_validates_schema"):
+            if hasattr(attr, "_validates_schema"):
                 schema_cache.append(attr_name)
 
     # Assign to class - cast to type that has the cache attributes
