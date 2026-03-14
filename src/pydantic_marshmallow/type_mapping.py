@@ -7,15 +7,19 @@ TYPE_MAPPING for basic types and adding support for generic collections.
 
 from __future__ import annotations
 
+import threading
 from enum import Enum as PyEnum
 from functools import lru_cache
 from types import UnionType
 from typing import Any, Literal, Union, cast, get_args, get_origin
 
 from marshmallow import Schema, fields as ma_fields
+from marshmallow.validate import OneOf
 from pydantic import BaseModel
 
 # Track models being processed to detect recursion
+# Protected by _processing_lock for thread safety (supports free-threaded Python 3.14+)
+_processing_lock = threading.Lock()
 _processing_models: set[type[Any]] = set()
 
 
@@ -73,12 +77,11 @@ def type_to_marshmallow_field(type_hint: Any) -> Any:
     if type_hint is type(None):
         return ma_fields.Raw(allow_none=True)
 
-    # Handle Literal types
+    # Handle Literal types — add OneOf so ecosystem tools (apispec, flask-smorest)
+    # can infer enum constraints for OpenAPI generation
     if origin is Literal:
-        # For single-value Literal, could be a constant
-        if args and len(args) == 1:
-            # Use Raw with validation - Pydantic will enforce the literal
-            return ma_fields.Raw()
+        if args:
+            return ma_fields.Raw(validate=OneOf(args))
         return ma_fields.Raw()
 
     # Handle Union (including Optional) - supports both Union[X, Y] and X | Y syntax
@@ -99,27 +102,25 @@ def type_to_marshmallow_field(type_hint: Any) -> Any:
         pass  # Not a valid class for issubclass check
 
     # Handle nested Pydantic models - use Nested with a dynamically created schema
-    try:
-        if isinstance(type_hint, type) and issubclass(type_hint, BaseModel):
-            # Import here to avoid circular imports
-            from pydantic_marshmallow.bridge import PydanticSchema
+    # On Python 3.10, types.GenericAlias (e.g. list[str]) passes isinstance(x, type)
+    # but fails issubclass(). Filter these out — they have an origin and are handled above.
+    if isinstance(type_hint, type) and origin is None and issubclass(type_hint, BaseModel):
+        # Import here to avoid circular imports
+        from pydantic_marshmallow.bridge import PydanticSchema
 
-            # Check if we're already processing this model (recursion detection)
-            # Use a module-level set to track models being processed
+        # Check if we're already processing this model (recursion detection)
+        # Thread-safe: lock protects check+add, released before expensive work
+        with _processing_lock:
             if type_hint in _processing_models:
-                # Self-referential model - use Raw to avoid infinite recursion
-                # Pydantic will still handle the validation correctly
                 return ma_fields.Raw()
+            _processing_models.add(type_hint)
 
-            try:
-                _processing_models.add(type_hint)
-                # Create a nested schema class for this model
-                nested_schema = PydanticSchema.from_model(type_hint)
-                return ma_fields.Nested(nested_schema)
-            finally:
+        try:
+            nested_schema = PydanticSchema.from_model(type_hint)
+            return ma_fields.Nested(nested_schema)
+        finally:
+            with _processing_lock:
                 _processing_models.discard(type_hint)
-    except TypeError:
-        pass  # Not a valid class for issubclass check
 
     # Handle list[T]
     if origin is list:
@@ -147,10 +148,13 @@ def type_to_marshmallow_field(type_hint: Any) -> Any:
     # Handle Tuple - use Marshmallow's Tuple field if available
     if origin is tuple:
         if args:
+            # Variable-length tuple: tuple[int, ...] → List(Integer())
+            if len(args) == 2 and args[1] is Ellipsis:
+                return ma_fields.List(type_to_marshmallow_field(args[0]))
             # Fixed-length tuple with specific types
             tuple_fields = [type_to_marshmallow_field(arg) for arg in args if arg is not ...]
             if tuple_fields:
-                return ma_fields.Tuple(tuple_fields=tuple(tuple_fields))
+                return ma_fields.Tuple(tuple_fields=tuple(tuple_fields))  # type: ignore[no-untyped-call,unused-ignore]
         return ma_fields.List(ma_fields.Raw())
 
     # Check for Pydantic special types by module
@@ -159,13 +163,21 @@ def type_to_marshmallow_field(type_hint: Any) -> Any:
 
     # Handle Pydantic networking types
     if 'pydantic' in type_module:
-        if 'EmailStr' in type_name or type_name == 'EmailStr':
+        if 'EmailStr' in type_name:
             return ma_fields.Email()
         url_types = ('Url', 'URL', 'HttpUrl', 'AnyUrl')
         if any(ut in type_name for ut in url_types):
             return ma_fields.URL()
-        if 'IP' in type_name:
-            return ma_fields.IP()  # type: ignore[no-untyped-call,unused-ignore]
+        # Use exact name matching to avoid false positives (e.g. "ZIPCode", "RecIPe")
+        ip_types = (
+            'IPvAnyAddress', 'IPvAnyInterface', 'IPvAnyNetwork',
+            'IPv4Address', 'IPv6Address', 'IPv4Interface', 'IPv6Interface',
+            'IPv4Network', 'IPv6Network',
+        )
+        if type_name in ip_types:
+            if hasattr(ma_fields, 'IP'):
+                return ma_fields.IP()  # type: ignore[no-untyped-call,unused-ignore]
+            return ma_fields.String()
 
     # Use Marshmallow's native TYPE_MAPPING for basic types
     # This ensures we stay in sync with Marshmallow's type handling
