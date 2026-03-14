@@ -81,7 +81,7 @@ def convert_pydantic_field(
     origin = get_origin(annotation)
     args = get_args(annotation)
     is_union = origin is Union or origin is UnionType
-    if origin is type(None) or (is_union and type(None) in args):
+    if is_union and type(None) in args:
         ma_field.allow_none = True
 
     return ma_field

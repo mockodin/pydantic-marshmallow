@@ -81,10 +81,32 @@ def _get_model_field_names_with_aliases(model_class: type[BaseModel]) -> frozens
     Thread-safe via @lru_cache. Caches the result per model class to avoid
     repeated computation in the load() hot path.
     """
+    try:
+        from pydantic import AliasChoices, AliasPath
+
+        _alias_choices_cls = AliasChoices
+        _alias_path_cls = AliasPath
+    except ImportError:
+        _alias_choices_cls = None
+        _alias_path_cls = None
+
     field_names = set(model_class.model_fields.keys())
     for field_info in model_class.model_fields.values():
         if field_info.alias:
             field_names.add(field_info.alias)
+        va = field_info.validation_alias
+        if isinstance(va, str):
+            field_names.add(va)
+        elif _alias_path_cls is not None and isinstance(va, _alias_path_cls):
+            if va.path and isinstance(va.path[0], str):
+                field_names.add(va.path[0])
+        elif _alias_choices_cls is not None and isinstance(va, _alias_choices_cls):
+            for choice in va.choices:
+                if isinstance(choice, str):
+                    field_names.add(choice)
+                elif _alias_path_cls is not None and isinstance(choice, _alias_path_cls):
+                    if choice.path and isinstance(choice.path[0], str):
+                        field_names.add(choice.path[0])
     return frozenset(field_names)
 
 
@@ -1132,9 +1154,35 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         # Let Marshmallow handle the standard dump
         result: dict[str, Any] = cast(dict[str, Any], super().dump(obj, many=False))
 
-        # Apply field exclusions
-        if fields_to_exclude:
+        # Apply field exclusions (expand to include data_key aliases)
+        if fields_to_exclude and model_class:
+            aliased_excludes = set(fields_to_exclude)
+            for fname in fields_to_exclude:
+                fi = model_class.model_fields.get(fname)
+                if fi and fi.alias:
+                    aliased_excludes.add(fi.alias)
+            result = {k: v for k, v in result.items() if k not in aliased_excludes}
+        elif fields_to_exclude:
             result = {k: v for k, v in result.items() if k not in fields_to_exclude}
+
+        # Apply exclude_none to serialized result (works for both BaseModel and dict inputs)
+        # BaseModel path's fields_to_exclude handles alias-aware removal above;
+        # this catches dict inputs and any remaining None values post-serialization.
+        if exclude_none:
+            result = {k: v for k, v in result.items() if v is not None}
+
+        # Apply serialization aliases to dump output
+        # Fall back to schema's model class for nested schemas receiving dicts
+        alias_model = model_class or self._model_class
+        if alias_model:
+            for field_name, field_info in alias_model.model_fields.items():
+                ser_alias = field_info.serialization_alias
+                if ser_alias and isinstance(ser_alias, str):
+                    # Field may be under original name or data_key (from alias)
+                    data_key = field_info.alias
+                    current_key = data_key if (data_key and data_key in result) else field_name
+                    if current_key in result and current_key != ser_alias:
+                        result[ser_alias] = result.pop(current_key)
 
         # Merge in computed fields
         if computed_values:
