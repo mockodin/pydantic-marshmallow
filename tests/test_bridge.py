@@ -1,5 +1,7 @@
 """Tests for the Pydantic-Marshmallow bridge."""
 
+import threading
+
 import pytest
 from marshmallow import ValidationError
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -375,3 +377,52 @@ class TestPydanticSchemaDecorator:
         # Can still use model_validate
         user2 = User.model_validate({"name": "Bob", "age": 25})
         assert user2.name == "Bob"
+
+
+# ============================================================================
+# H5: Cache stampede double-check in from_model()
+# ============================================================================
+
+
+class TestCacheStampede:
+    """H5: from_model() should double-check cache after acquiring lock."""
+
+    def test_from_model_returns_cached_on_second_call(self) -> None:
+        """Calling from_model twice returns the same class (cached)."""
+
+        class CacheTestModel(BaseModel):
+            x: int
+
+        schema1 = PydanticSchema.from_model(CacheTestModel)
+        schema2 = PydanticSchema.from_model(CacheTestModel)
+        assert schema1 is schema2
+
+    def test_concurrent_from_model_same_class(self) -> None:
+        """Two threads calling from_model for same model get same class."""
+
+        class ConcurrentModel(BaseModel):
+            val: str
+
+        results: list[type] = []
+        errors: list[Exception] = []
+        lock = threading.Lock()
+
+        def create_schema() -> None:
+            try:
+                result = PydanticSchema.from_model(ConcurrentModel)
+                with lock:
+                    results.append(result)
+            except Exception as e:
+                with lock:
+                    errors.append(e)
+
+        threads = [threading.Thread(target=create_schema) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors
+        assert len(results) == 4
+        # All threads should get the same cached class
+        assert all(r is results[0] for r in results)
