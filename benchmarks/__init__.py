@@ -13,7 +13,6 @@ from .benchmark_framework import (
     run_benchmark,
 )
 
-
 __all__ = [
     "BenchmarkResult",
     "BenchmarkSuite",

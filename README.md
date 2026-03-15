@@ -21,21 +21,23 @@ pydantic-marshmallow uses Pydantic's Rust-powered validation engine under the ho
 
 | Operation | MA 3.x | MA 4.x | Bridge (MA 3.x) | Bridge (MA 4.x) |
 |-----------|--------|--------|-----------------|-----------------|
-| Simple load | 5.3 µs | 4.8 µs | 2.9 µs | 2.9 µs |
-| Nested model | 10.9 µs | 10.5 µs | 3.4 µs | 3.2 µs |
-| Deep nested (4 levels) | 31.2 µs | 29.0 µs | 5.3 µs | 5.2 µs |
-| Batch (100 items) | 454 µs | 424 µs | 260 µs | 259 µs |
+| Simple load | 5.3 µs | 4.8 µs | 2.0 µs | 2.0 µs |
+| Nested model | 10.9 µs | 10.3 µs | 2.4 µs | 2.4 µs |
+| Deep nested (4 levels) | 31.2 µs | 31.7 µs | 4.2 µs | 4.2 µs |
+| Batch (100 items) | 454 µs | 424 µs | 162 µs | 162 µs |
 
 #### What the Numbers Show
 
 1. **MA 3.x → MA 4.x**: Marshmallow 4.x improved ~10% over 3.x (5.3 → 4.8 µs for simple loads)
-2. **MA 3.x → Bridge**: Adding Pydantic delivers **1.8x–5.9x speedup** over pure MA 3.x
-3. **MA 4.x → Bridge**: Still **1.6x–5.6x faster** than native MA 4.x
-4. **Bridge consistency**: ~2.9 µs for simple loads regardless of Marshmallow version
+2. **MA 3.x → Bridge**: Adding Pydantic delivers **2.7x–7.4x speedup** over pure MA 3.x
+3. **MA 4.x → Bridge**: Still **2.4x–7.5x faster** than native MA 4.x
+4. **Bridge consistency**: ~2.0 µs for simple loads regardless of Marshmallow version
 
 The bridge delegates validation to Pydantic's Rust-powered core, bypassing Marshmallow's field processing. This means bridge performance is **independent of Marshmallow version**—you get consistent speed whether you're on MA 3.x or 4.x.
 
 *Benchmarks: Python 3.11, median of 3 runs with IQR outlier removal. Run `python -m benchmarks.run_benchmarks` to reproduce.*
+
+> **Full benchmark report:** See [benchmarks/BENCHMARK_REPORT.md](benchmarks/BENCHMARK_REPORT.md) for per-type breakdowns across all supported types (scalars, datetime, decimal, UUID, email, URL, IP, collections, optionals, constrained fields, and kitchen-sink models).
 
 ### Why it matters
 

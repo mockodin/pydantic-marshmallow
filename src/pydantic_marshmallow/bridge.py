@@ -68,6 +68,17 @@ _hybrid_schema_cache: dict[type[Any], type[PydanticSchema[Any]]] = {}
 # This avoids recreating schema classes for the same model+options
 _schema_class_cache: dict[tuple[type[Any], str | None, tuple[tuple[str, Any], ...]], type[Any]] = {}
 
+# Field types that are safe to bypass MA's field._serialize for pre-validated data
+# Uses a set for O(1) exact-type matching (not isinstance — avoids subclass matches)
+_FAST_DUMP_TYPES: frozenset[type] = frozenset({
+    ma_fields.String,
+    ma_fields.Integer,
+    ma_fields.Float,
+    ma_fields.Boolean,
+    ma_fields.Number,
+    ma_fields.Raw,
+})
+
 # Field validator registry: maps (schema_class, field_name) -> list of validator functions
 _field_validators: dict[tuple[type[Any], str], list[Callable[..., Any]]] = {}
 _schema_validators: dict[type[Any], list[Callable[..., Any]]] = {}
@@ -333,9 +344,77 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         if self._model_class:
             self._setup_fields_from_model()
 
+        # PERFORMANCE: Cache hook presence flags at init time
+        # Avoids per-call _has_hook() iteration in _do_load hot path
+        self._cache_hook_flags()
+
         # Call on_bind_field for each field
         for field_name, field_obj in self.fields.items():
             self.on_bind_field(field_name, field_obj)
+
+    def _cache_hook_flags(self) -> None:
+        """Cache hook presence flags to avoid per-call iteration in hot paths."""
+        hooks = self._hooks
+
+        def _check_hook(hook_type: str) -> bool:
+            # Check string key (MA 4.x)
+            val = hooks.get(hook_type)
+            if val:
+                return True
+            # Check tuple keys (MA 3.x)
+            hooks_any: dict[Any, Any] = cast(dict[Any, Any], hooks)
+            for key in hooks_any:
+                if (
+                    isinstance(key, tuple)
+                    and len(key) >= 1
+                    and key[0] == hook_type
+                    and hooks_any[key]
+                ):
+                    return True
+            return False
+
+        self._cached_has_validators: bool = bool(
+            _check_hook(VALIDATES)
+            or _check_hook(VALIDATES_SCHEMA)
+            or self._field_validators_cache
+            or self._schema_validators_cache
+        )
+        self._cached_has_pre_load: bool = _check_hook("pre_load")
+        self._cached_has_post_load: bool = _check_hook("post_load")
+        self._cached_has_pre_dump: bool = _check_hook("pre_dump")
+        self._cached_has_post_dump: bool = _check_hook("post_dump")
+        self._cached_has_dump_hooks: bool = (
+            self._cached_has_pre_dump or self._cached_has_post_dump
+        )
+
+        # Dump fast-path caching: precompute field map and eligibility
+        self._dump_field_map: dict[str, str] = {}
+        self._can_fast_dump: bool = False
+
+        if self._model_class:
+            has_ser_aliases = any(
+                fi.serialization_alias
+                for fi in self._model_class.model_fields.values()
+            )
+            has_computed = bool(_get_computed_fields(self._model_class))
+
+            if (
+                not has_ser_aliases
+                and not has_computed
+                and not self._cached_has_dump_hooks
+            ):
+                field_map: dict[str, str] = {}
+                can_fast = True
+                for attr_name, field_obj in self.dump_fields.items():
+                    # Use exact type match (not isinstance) to avoid catching
+                    # subclasses like MA3's UUID(String) that need _serialize()
+                    if type(field_obj) not in _FAST_DUMP_TYPES:
+                        can_fast = False
+                        break
+                    field_map[attr_name] = field_obj.data_key or attr_name
+                if can_fast:
+                    self._dump_field_map = field_map
+                    self._can_fast_dump = True
 
     def on_bind_field(self, field_name: str, field_obj: Any) -> None:
         """
@@ -634,7 +713,6 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         # PERFORMANCE: Hoist frequently accessed attributes to local variables
         # This avoids repeated self.__dict__ lookups in the hot path
         model_class = self._model_class
-        hooks = self._hooks
 
         # Resolve settings
         if many is None:
@@ -694,23 +772,24 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
 
             return results
 
-        # Step 1: Run pre_load hooks
-        # MA 4.x requires 'unknown' parameter, MA 3.x doesn't accept it
-        pre_load_kwargs: dict[str, Any] = {
-            "many": False,
-            "original_data": data,
-            "partial": partial,
-        }
-        if _MARSHMALLOW_4_PLUS:  # pragma: no cover
-            pre_load_kwargs["unknown"] = unknown_setting
-        processed_data_raw = self._invoke_load_processors(
-            "pre_load",
-            data,
-            **pre_load_kwargs,
-        )
-
-        # Type narrowing: at this point (many=False path), data is always a dict
-        processed_data: dict[str, Any] = cast(dict[str, Any], processed_data_raw)
+        # Step 1: Run pre_load hooks (skip if no hooks registered)
+        if self._cached_has_pre_load:
+            # MA 4.x requires 'unknown' parameter, MA 3.x doesn't accept it
+            pre_load_kwargs: dict[str, Any] = {
+                "many": False,
+                "original_data": data,
+                "partial": partial,
+            }
+            if _MARSHMALLOW_4_PLUS:  # pragma: no cover
+                pre_load_kwargs["unknown"] = unknown_setting
+            processed_data_raw = self._invoke_load_processors(
+                "pre_load",
+                data,
+                **pre_load_kwargs,
+            )
+            processed_data: dict[str, Any] = cast(dict[str, Any], processed_data_raw)
+        else:
+            processed_data = cast(dict[str, Any], data)
 
         # Step 2: Handle unknown fields based on setting
         # PERFORMANCE: Use cached field names instead of computing every time
@@ -735,34 +814,11 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         pydantic_instance: M | None = None
         validated_data: dict[str, Any]
 
-        # OPTIMIZATION: Determine if we need model_dump() for validators/result
-        # Skip expensive model_dump() when not needed
-        # Note: MA 3.x uses tuple keys ('validates', field) and ('validates_schema', pass_many)
-        # MA 4.x uses string keys ('validates', 'validates_schema')
-        # Check for any hook that starts with the validator type
-        def _has_hook(hook_type: str) -> bool:
-            """Check if any hook matches the type (handles both MA 3.x and 4.x key formats)."""
-            # Check string key (MA 4.x) - safe to access defaultdict
-            if hooks.get(hook_type):
-                return True
-            # Check tuple keys (MA 3.x) - cast to Any to avoid mypy narrowing issues
-            # across different Marshmallow versions with different key types
-            hooks_any: dict[Any, Any] = cast(dict[Any, Any], hooks)
-            for key in hooks_any:
-                if isinstance(key, tuple) and len(key) >= 1 and key[0] == hook_type and hooks_any[key]:
-                    return True
-            return False
-
-        has_validators = bool(
-            _has_hook(VALIDATES)
-            or _has_hook(VALIDATES_SCHEMA)
-            or self._field_validators_cache
-            or self._schema_validators_cache
-        )
+        # PERFORMANCE: Use cached hook flags instead of per-call iteration
         needs_dict = (
             not return_instance  # Need dict for result
             or unknown_setting == INCLUDE  # Need dict to merge unknown fields
-            or has_validators  # Need dict for validators
+            or self._cached_has_validators  # Need dict for validators
         )
 
         if model_class:
@@ -786,64 +842,64 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         else:
             validated_data = processed_data
 
-        # Step 4: Run field validators (BOTH Marshmallow native AND our custom)
-        # This ensures validators work regardless of import source
-        # ErrorStore is marshmallow internal without type hints - cast constructor for type safety
-        error_store_cls: Callable[[], Any] = cast(Callable[[], Any], ErrorStore)
-        error_store: Any = error_store_cls()
+        # Steps 4-5: Run validators (skip entirely when no validators registered)
+        if self._cached_has_validators:
+            # ErrorStore is marshmallow internal without type hints - cast constructor for type safety
+            error_store_cls: Callable[[], Any] = cast(Callable[[], Any], ErrorStore)
+            error_store: Any = error_store_cls()
 
-        # 4a: Run Marshmallow's native @validates decorators (from hooks)
-        self._invoke_field_validators(
-            error_store=error_store,
-            data=validated_data,
-            many=False,
-        )
+            # 4a: Run Marshmallow's native @validates decorators (from hooks)
+            self._invoke_field_validators(
+                error_store=error_store,
+                data=validated_data,
+                many=False,
+            )
 
-        # 4b: Run our custom @validates decorators (backwards compatibility)
-        try:
-            self._run_field_validators(validated_data)
-        except MarshmallowValidationError as field_error:
-            # Merge into error_store
-            if isinstance(field_error.messages, dict):
-                for key, msgs in field_error.messages.items():
-                    error_store.store_error({key: msgs if isinstance(msgs, list) else [msgs]})
+            # 4b: Run our custom @validates decorators (backwards compatibility)
+            try:
+                self._run_field_validators(validated_data)
+            except MarshmallowValidationError as field_error:
+                # Merge into error_store
+                if isinstance(field_error.messages, dict):
+                    for key, msgs in field_error.messages.items():
+                        error_store.store_error({key: msgs if isinstance(msgs, list) else [msgs]})
 
-        has_field_errors = bool(error_store.errors)
+            has_field_errors = bool(error_store.errors)
 
-        # Step 5: Run schema validators (BOTH Marshmallow native AND our custom)
-        # 5a: Run Marshmallow's native @validates_schema decorators
-        # MA 4.x renamed pass_many -> pass_collection
-        # Build common kwargs
-        validator_kwargs: dict[str, Any] = {
-            "error_store": error_store,
-            "data": validated_data,
-            "original_data": data,
-            "many": False,
-            "partial": partial,
-            "field_errors": has_field_errors,
-        }
-        # MA 4.x requires 'unknown' parameter
-        if _MARSHMALLOW_4_PLUS:  # pragma: no cover
-            validator_kwargs["unknown"] = unknown_setting
-        # Pass the correctly-named parameter for the marshmallow version
-        pass_param = "pass_collection" if _MARSHMALLOW_4_PLUS else "pass_many"
+            # Step 5: Run schema validators (BOTH Marshmallow native AND our custom)
+            # 5a: Run Marshmallow's native @validates_schema decorators
+            # MA 4.x renamed pass_many -> pass_collection
+            # Build common kwargs
+            validator_kwargs: dict[str, Any] = {
+                "error_store": error_store,
+                "data": validated_data,
+                "original_data": data,
+                "many": False,
+                "partial": partial,
+                "field_errors": has_field_errors,
+            }
+            # MA 4.x requires 'unknown' parameter
+            if _MARSHMALLOW_4_PLUS:  # pragma: no cover
+                validator_kwargs["unknown"] = unknown_setting
+            # Pass the correctly-named parameter for the marshmallow version
+            pass_param = "pass_collection" if _MARSHMALLOW_4_PLUS else "pass_many"
 
-        # Only run pass_many=False validators in per-item mode
-        # pass_many=True validators are handled at the collection level (in many=True block above)
-        self._invoke_schema_validators(**{pass_param: False, **validator_kwargs})
+            # Only run pass_many=False validators in per-item mode
+            # pass_many=True validators are handled at the collection level (in many=True block above)
+            self._invoke_schema_validators(**{pass_param: False, **validator_kwargs})
 
-        # 5b: Run our custom @validates_schema decorators (backwards compatibility)
-        try:
-            self._run_schema_validators(validated_data, has_field_errors=has_field_errors)
-        except MarshmallowValidationError as schema_error:
-            if isinstance(schema_error.messages, dict):
-                for key, msgs in schema_error.messages.items():
-                    error_store.store_error({key: msgs if isinstance(msgs, list) else [msgs]})
+            # 5b: Run our custom @validates_schema decorators (backwards compatibility)
+            try:
+                self._run_schema_validators(validated_data, has_field_errors=has_field_errors)
+            except MarshmallowValidationError as schema_error:
+                if isinstance(schema_error.messages, dict):
+                    for key, msgs in schema_error.messages.items():
+                        error_store.store_error({key: msgs if isinstance(msgs, list) else [msgs]})
 
-        # Raise combined errors if any
-        if error_store.errors:
-            error = MarshmallowValidationError(dict(error_store.errors))
-            self.handle_error(error, data, many=False)
+            # Raise combined errors if any
+            if error_store.errors:
+                error = MarshmallowValidationError(dict(error_store.errors))
+                self.handle_error(error, data, many=False)
 
         # Step 6: Prepare result based on return_instance flag
         if model_class and return_instance:
@@ -880,8 +936,8 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
             # Return dict instead of instance
             result = validated_data
 
-        # Step 7: Run post_load hooks
-        if postprocess:
+        # Step 7: Run post_load hooks (skip if no hooks registered)
+        if postprocess and self._cached_has_post_load:
             # MA 4.x requires 'unknown' parameter, MA 3.x doesn't accept it
             post_load_kwargs: dict[str, Any] = {
                 "many": False,
@@ -1100,6 +1156,22 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         exclude_none: bool = False,
     ) -> dict[str, Any]:
         """Dump a single object, handling computed fields and exclusion options."""
+        # FAST PATH: Simple model with no exclusions, no ser aliases,
+        # no hooks, no computed fields, and all simple field types.
+        # Reads attributes directly from the model instance, skipping
+        # both model_dump() and MA's dump() for ~3x speedup.
+        if (
+            self._can_fast_dump
+            and isinstance(obj, BaseModel)
+            and not exclude_unset
+            and not exclude_defaults
+            and not exclude_none
+        ):
+            return {
+                output_key: getattr(obj, attr_name)
+                for attr_name, output_key in self._dump_field_map.items()
+            }
+
         computed_values = {}
         model_class = None
         fields_to_exclude: set[str] = set()
@@ -1151,7 +1223,6 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
             # Use by_alias=False - Marshmallow handles aliases via data_key
             obj = obj.model_dump(by_alias=False)
 
-        # Let Marshmallow handle the standard dump
         result: dict[str, Any] = cast(dict[str, Any], super().dump(obj, many=False))
 
         # Apply field exclusions (expand to include data_key aliases)

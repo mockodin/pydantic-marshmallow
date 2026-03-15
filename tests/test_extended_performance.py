@@ -511,7 +511,7 @@ class TestComprehensiveSummary:
 
             if marshmallow:
                 speedup = marshmallow / bridge if bridge > 0 else 0
-                symbol = "🚀" if speedup > 1 else "⚠️"
+                symbol = ">>" if speedup > 1 else ">!"
                 print(f"{scenario:<25} {'-':<15} {bridge:<15.1f} {marshmallow:<15.1f} {speedup:.2f}x {symbol}")
             else:
                 overhead = bridge / pydantic_baseline if pydantic_baseline > 0 else 0
