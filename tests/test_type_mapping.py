@@ -111,25 +111,21 @@ class TestThreadSafeProcessingModels:
 class TestLiteralOneOf:
     """M1: Literal types should produce Raw(validate=OneOf(...))."""
 
-    def test_literal_single_value(self) -> None:
-        """Single-value Literal gets OneOf with one allowed value."""
-        field = type_to_marshmallow_field(Literal["active"])
+    @pytest.mark.parametrize(
+        "literal_type,expected_choices",
+        [
+            (Literal["active"], {"active"}),
+            (Literal["a", "b", "c"], {"a", "b", "c"}),
+            (Literal[1, 2, 3], {1, 2, 3}),
+        ],
+        ids=["single_str", "multi_str", "int_values"],
+    )
+    def test_literal_produces_oneof(self, literal_type: type, expected_choices: set) -> None:
+        """Literal types produce Raw field with OneOf validator."""
+        field = type_to_marshmallow_field(literal_type)
         assert isinstance(field, ma_fields.Raw)
-        assert any(isinstance(v, ma_validate.OneOf) for v in field.validators)
         oneof = next(v for v in field.validators if isinstance(v, ma_validate.OneOf))
-        assert set(oneof.choices) == {"active"}
-
-    def test_literal_multi_value(self) -> None:
-        """Multi-value Literal gets OneOf with all allowed values."""
-        field = type_to_marshmallow_field(Literal["a", "b", "c"])
-        oneof = next(v for v in field.validators if isinstance(v, ma_validate.OneOf))
-        assert set(oneof.choices) == {"a", "b", "c"}
-
-    def test_literal_int_values(self) -> None:
-        """Literal with int values gets correct OneOf."""
-        field = type_to_marshmallow_field(Literal[1, 2, 3])
-        oneof = next(v for v in field.validators if isinstance(v, ma_validate.OneOf))
-        assert set(oneof.choices) == {1, 2, 3}
+        assert set(oneof.choices) == expected_choices
 
     def test_literal_in_model(self) -> None:
         """Literal field in a Pydantic model works end-to-end."""
@@ -152,17 +148,19 @@ class TestLiteralOneOf:
 class TestVariableLengthTuple:
     """M2: tuple[int, ...] should map to List(Integer()), not List(Raw())."""
 
-    def test_variable_length_tuple_preserves_type(self) -> None:
-        """tuple[int, ...] → List with Integer inner field."""
-        field = type_to_marshmallow_field(tuple[int, ...])
+    @pytest.mark.parametrize(
+        "tuple_type,inner_field_type",
+        [
+            (tuple[int, ...], ma_fields.Integer),
+            (tuple[str, ...], ma_fields.String),
+        ],
+        ids=["int_ellipsis", "str_ellipsis"],
+    )
+    def test_variable_length_preserves_type(self, tuple_type: type, inner_field_type: type) -> None:
+        """Variable-length tuple maps to List with correct inner field type."""
+        field = type_to_marshmallow_field(tuple_type)
         assert isinstance(field, ma_fields.List)
-        assert isinstance(field.inner, ma_fields.Integer)
-
-    def test_variable_length_tuple_str(self) -> None:
-        """tuple[str, ...] → List with String inner field."""
-        field = type_to_marshmallow_field(tuple[str, ...])
-        assert isinstance(field, ma_fields.List)
-        assert isinstance(field.inner, ma_fields.String)
+        assert isinstance(field.inner, inner_field_type)
 
     def test_fixed_length_tuple_unchanged(self) -> None:
         """tuple[int, str] still produces Tuple with specific fields."""
@@ -192,21 +190,11 @@ class TestIPTypeMatching:
         # Should NOT be an IP field
         assert not isinstance(field, ma_fields.IP) if hasattr(ma_fields, "IP") else True
 
-    def test_ipv4_address_matches(self) -> None:
-        """Pydantic IPv4Address type maps to IP or String field."""
-        fake_ipv4 = SimpleNamespace(__module__="pydantic.networks", __name__="IPv4Address")
-
-        field = type_to_marshmallow_field(fake_ipv4)
-        if hasattr(ma_fields, "IP"):
-            assert isinstance(field, ma_fields.IP)
-        else:
-            assert isinstance(field, ma_fields.String)
-
-    def test_ipvanyaddress_matches(self) -> None:
-        """Pydantic IPvAnyAddress type maps correctly."""
-        fake_ipvany = SimpleNamespace(__module__="pydantic.networks", __name__="IPvAnyAddress")
-
-        field = type_to_marshmallow_field(fake_ipvany)
+    @pytest.mark.parametrize("type_name", ["IPv4Address", "IPvAnyAddress"])
+    def test_ip_type_maps_correctly(self, type_name: str) -> None:
+        """Pydantic IP types map to IP field (or String fallback)."""
+        fake_ip = SimpleNamespace(__module__="pydantic.networks", __name__=type_name)
+        field = type_to_marshmallow_field(fake_ip)
         if hasattr(ma_fields, "IP"):
             assert isinstance(field, ma_fields.IP)
         else:
