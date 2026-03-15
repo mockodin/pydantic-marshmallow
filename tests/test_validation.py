@@ -13,6 +13,7 @@ from marshmallow.exceptions import ValidationError
 from pydantic import BaseModel, Field
 
 from pydantic_marshmallow import schema_for
+from pydantic_marshmallow.validators import cache_validators, validates, validates_schema
 
 # =============================================================================
 # Shared Test Data (from conftest.py, but imported models redefined for clarity)
@@ -466,3 +467,62 @@ class TestWithSharedFixtures:
         result = simple_user_schema.load(data)
         assert result.name == "Custom User"
         assert result.age == 25
+
+
+# ============================================================================
+# M6: Dual-decorated validators (elif → if)
+# ============================================================================
+
+
+class TestDualDecoratedValidators:
+    """M6: A function decorated with both @validates and @validates_schema should be cached for both."""
+
+    def test_dual_decorated_function(self) -> None:
+        """Function with both _validates_field and _validates_schema is in both caches."""
+
+        class DualSchema:
+            _field_validators_cache: dict[str, list[str]] = {}
+            _schema_validators_cache: list[str] = []
+
+            @validates("name")
+            @validates_schema
+            def check_name(self, value: str, **kwargs: object) -> None:
+                pass
+
+        cache_validators(DualSchema)
+
+        assert "name" in DualSchema._field_validators_cache
+        assert "check_name" in DualSchema._field_validators_cache["name"]
+        assert "check_name" in DualSchema._schema_validators_cache
+
+    def test_field_only_decorator(self) -> None:
+        """Function with only @validates is only in field cache."""
+
+        class FieldOnlySchema:
+            _field_validators_cache: dict[str, list[str]] = {}
+            _schema_validators_cache: list[str] = []
+
+            @validates("email")
+            def check_email(self, value: str) -> None:
+                pass
+
+        cache_validators(FieldOnlySchema)
+
+        assert "email" in FieldOnlySchema._field_validators_cache
+        assert "check_email" not in FieldOnlySchema._schema_validators_cache
+
+    def test_schema_only_decorator(self) -> None:
+        """Function with only @validates_schema is only in schema cache."""
+
+        class SchemaOnlySchema:
+            _field_validators_cache: dict[str, list[str]] = {}
+            _schema_validators_cache: list[str] = []
+
+            @validates_schema
+            def check_all(self, data: dict, **kwargs: object) -> None:
+                pass
+
+        cache_validators(SchemaOnlySchema)
+
+        assert SchemaOnlySchema._field_validators_cache == {}
+        assert "check_all" in SchemaOnlySchema._schema_validators_cache

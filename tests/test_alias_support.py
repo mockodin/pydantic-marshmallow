@@ -6,7 +6,7 @@ Covers GitHub issue #16: full alias support beyond the basic `alias` field.
 from __future__ import annotations
 
 import pytest
-from marshmallow import EXCLUDE, RAISE, ValidationError
+from marshmallow import EXCLUDE, RAISE
 from pydantic import AliasChoices, AliasPath, BaseModel, ConfigDict, Field
 
 from pydantic_marshmallow import schema_for
@@ -504,10 +504,6 @@ class TestExcludeNoneDictInputs:
 
 class TestAliasChoicesAndPath:
     """AliasChoices and AliasPath should be recognised as valid field names."""
-
-    @pytest.fixture(autouse=True)
-    def _require_alias_types(self) -> None:
-        pytest.importorskip("pydantic.fields", reason="AliasChoices/AliasPath not available")
 
     def test_alias_path_recognized(self) -> None:
         """AliasPath validation_alias adds top-level key to known names."""
