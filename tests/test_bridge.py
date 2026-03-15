@@ -405,12 +405,16 @@ class TestCacheStampede:
 
         results: list[type] = []
         errors: list[Exception] = []
+        lock = threading.Lock()
 
         def create_schema() -> None:
             try:
-                results.append(PydanticSchema.from_model(ConcurrentModel))
+                result = PydanticSchema.from_model(ConcurrentModel)
+                with lock:
+                    results.append(result)
             except Exception as e:
-                errors.append(e)
+                with lock:
+                    errors.append(e)
 
         threads = [threading.Thread(target=create_schema) for _ in range(4)]
         for t in threads:
