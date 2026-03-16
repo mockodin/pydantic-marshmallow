@@ -1501,7 +1501,7 @@ class HybridModel(BaseModel):
     Instance Caching:
         ``ma_load()`` / ``ma_dump()`` cache a default schema instance for
         performance.  Schemas with hooks (pre_load, post_load, @validates,
-        pre_dump, post_dump) always get a fresh instance to prevent leaked
+        @validates_schema, pre_dump, post_dump) always get a fresh instance to prevent leaked
         mutable state.  The cache is protected by an ``RLock``.
 
     Example:

@@ -187,7 +187,7 @@ Pydantic field constraints are mapped to Marshmallow validators so that ecosyste
 | Pydantic Constraint | Marshmallow Validator | OpenAPI Output |
 |--------------------|-----------------------|----------------|
 | `min_length` / `max_length` | `Length(min=, max=)` | `minLength` / `maxLength` |
-| `ge` / `le` / `gt` / `lt` | `Range(min=, max=)` | `minimum` / `maximum` |
+| `ge` / `le` / `gt` / `lt` | `Range(min=, max=)` | `minimum` / `maximum` / `exclusiveMinimum` / `exclusiveMaximum` |
 | `pattern` | `Regexp(regex)` | `pattern` |
 
 ```python

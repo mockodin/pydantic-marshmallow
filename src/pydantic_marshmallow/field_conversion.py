@@ -57,8 +57,6 @@ def convert_pydantic_field(
       Validators are **appended** to any existing ``ma_field.validators`` (e.g., ``OneOf``
       for ``Literal`` types), not replaced.  These validators exist solely for OpenAPI
       schema introspection (apispec/flask-smorest); Pydantic owns actual validation.
-    - Metadata forwarding (description, title, examples, json_schema_extra → MA metadata)
-    - Constraint-to-validator mapping (min_length, max_length, ge/le/gt/lt, pattern → MA validators)
 
     Args:
         field_name: Name of the field

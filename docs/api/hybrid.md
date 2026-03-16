@@ -98,7 +98,7 @@ the overhead of creating a new schema object on every `ma_load()` / `ma_dump()` 
 
 - **Hookless schemas**: Cached and reused (thread-safe via `RLock`)
 - **Schemas with hooks**: Fresh instance every call to prevent mutable state leaks
-- Passing `**kwargs` to `ma_load()` always creates a fresh instance
+- Passing `**kwargs` to any `ma_load*` / `ma_dump*` method always creates a fresh instance
 
 ### Thread Safety
 
