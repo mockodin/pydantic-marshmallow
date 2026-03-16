@@ -1,5 +1,6 @@
 """Tests for the Pydantic-Marshmallow bridge."""
 
+import queue
 import threading
 
 import pytest
@@ -327,13 +328,13 @@ class TestHybridModelInstanceCaching:
             name: str
             idx: int
 
-        errors: list[str] = []
+        errors: queue.Queue[str] = queue.Queue()
 
         def worker(thread_id: int):
             for i in range(50):
                 result = Counter.ma_load({"name": f"t{thread_id}", "idx": i})
                 if result.name != f"t{thread_id}" or result.idx != i:
-                    errors.append(
+                    errors.put(
                         f"Thread {thread_id} iteration {i}: "
                         f"got name={result.name}, idx={result.idx}"
                     )
@@ -344,7 +345,8 @@ class TestHybridModelInstanceCaching:
         for t in threads:
             t.join()
 
-        assert errors == [], f"Thread safety violations: {errors}"
+        error_list = list(errors.queue)
+        assert error_list == [], f"Thread safety violations: {error_list}"
 
 
 class TestMarshmallowEcosystemCompatibility:
