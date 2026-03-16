@@ -88,3 +88,19 @@ Use `PydanticSchema` when you need:
 - Custom validators on the schema
 - Field filtering (`only`, `exclude`, `load_only`, `dump_only`)
 - Full control over schema behavior
+
+## Performance
+
+### Instance Caching
+
+`HybridModel` caches default schema instances for hookless schemas, avoiding
+the overhead of creating a new schema object on every `ma_load()` / `ma_dump()` call.
+
+- **Hookless schemas**: Cached and reused (thread-safe via `RLock`)
+- **Schemas with hooks**: Fresh instance every call to prevent mutable state leaks
+- Passing `**kwargs` to any `ma_load*` / `ma_dump*` method always creates a fresh instance
+
+### Thread Safety
+
+All `ma_load()`, `ma_loads()`, `ma_dump()`, and `ma_dumps()` methods are safe
+to call from multiple threads concurrently.
