@@ -64,6 +64,10 @@ _cache_lock = threading.RLock()
 # Module-level cache for HybridModel schemas
 _hybrid_schema_cache: dict[type[Any], type[PydanticSchema[Any]]] = {}
 
+# Module-level cache for HybridModel default schema *instances*
+# Avoids repeated __init__ (field setup, hook caching, dump map) per ma_load/ma_dump call
+_hybrid_instance_cache: dict[type[Any], PydanticSchema[Any]] = {}
+
 # Cache for schema_for/from_model - key is (model, schema_name, frozen options)
 # This avoids recreating schema classes for the same model+options
 _schema_class_cache: dict[tuple[type[Any], str | None, tuple[tuple[str, Any], ...]], type[Any]] = {}
@@ -1526,27 +1530,42 @@ class HybridModel(BaseModel):
             return _hybrid_schema_cache[cls]
 
     @classmethod
+    def _default_schema_instance(cls) -> PydanticSchema[Any]:
+        """Get or create a cached default schema instance (thread-safe).
+
+        Avoids repeated __init__ overhead (field setup, hook caching,
+        dump-map building) for the common case of no custom kwargs.
+        """
+        cached = _hybrid_instance_cache.get(cls)
+        if cached is not None:
+            return cached
+        with _cache_lock:
+            if cls not in _hybrid_instance_cache:
+                _hybrid_instance_cache[cls] = cls.marshmallow_schema()()
+            return _hybrid_instance_cache[cls]
+
+    @classmethod
     def ma_load(cls, data: dict[str, Any], **kwargs: Any) -> HybridModel:
         """Load data using the Marshmallow schema."""
-        schema = cls.marshmallow_schema()()
+        schema = cls._default_schema_instance() if not kwargs else cls.marshmallow_schema()()
         result = schema.load(data, **kwargs)
         return cast(HybridModel, result)
 
     @classmethod
     def ma_loads(cls, json_str: str, **kwargs: Any) -> HybridModel:
         """Load data from a JSON string using the Marshmallow schema."""
-        schema = cls.marshmallow_schema()()
+        schema = cls._default_schema_instance() if not kwargs else cls.marshmallow_schema()()
         result = schema.loads(json_str, **kwargs)
         return cast(HybridModel, result)
 
     def ma_dump(self, **kwargs: Any) -> dict[str, Any]:
         """Dump this instance using the Marshmallow schema."""
-        schema = self.__class__.marshmallow_schema()()
+        schema = self.__class__._default_schema_instance() if not kwargs else self.__class__.marshmallow_schema()()
         result = schema.dump(self, **kwargs)
         return cast(dict[str, Any], result)
 
     def ma_dumps(self, **kwargs: Any) -> str:
         """Dump this instance to a JSON string using the Marshmallow schema."""
-        schema = self.__class__.marshmallow_schema()()
+        schema = self.__class__._default_schema_instance() if not kwargs else self.__class__.marshmallow_schema()()
         result = schema.dumps(self, **kwargs)
         return cast(str, result)

@@ -233,9 +233,11 @@ class TestNestedSchemas:
         user_schema = openapi_spec["components"]["schemas"]["UserWithAddress"]
 
         assert "address" in user_schema["properties"]
-        # Nested schema should have its own properties
+        # Nested schema should have its own properties, a $ref, or be
+        # wrapped in allOf (apispec wraps $ref in allOf when metadata like
+        # description is present on the field).
         address_prop = user_schema["properties"]["address"]
-        assert "properties" in address_prop or "$ref" in address_prop
+        assert "properties" in address_prop or "$ref" in address_prop or "allOf" in address_prop
 
     def test_nested_array_schema(self, spec):
         """Nested schemas in arrays work correctly."""
