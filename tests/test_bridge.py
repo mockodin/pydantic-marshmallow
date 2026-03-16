@@ -1,12 +1,14 @@
 """Tests for the Pydantic-Marshmallow bridge."""
 
+import queue
 import threading
 
 import pytest
-from marshmallow import ValidationError
+from marshmallow import ValidationError, pre_load
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from pydantic_marshmallow import HybridModel, PydanticSchema, schema_for
+from pydantic_marshmallow.bridge import _hybrid_instance_cache, _hybrid_schema_cache
 
 
 class TestPydanticSchemaBasic:
@@ -242,6 +244,109 @@ class TestHybridModel:
         schema = schema_cls()
         result = schema.load({"name": "Alice", "age": 30})
         assert isinstance(result, User)
+
+
+class TestHybridModelInstanceCaching:
+    """Verify the hook-guarded instance cache doesn't leak state."""
+
+    def test_repeated_ma_load_independent_results(self):
+        """Repeated ma_load calls produce independent model instances."""
+        class Item(HybridModel):
+            name: str
+            value: int
+
+        a = Item.ma_load({"name": "alpha", "value": 1})
+        b = Item.ma_load({"name": "beta", "value": 2})
+
+        assert a.name == "alpha" and a.value == 1
+        assert b.name == "beta" and b.value == 2
+        assert a is not b
+
+    def test_repeated_ma_dump_independent_results(self):
+        """Repeated ma_dump calls produce independent dicts."""
+        class Item(HybridModel):
+            name: str
+            value: int
+
+        a = Item(name="alpha", value=1)
+        b = Item(name="beta", value=2)
+
+        da = a.ma_dump()
+        db = b.ma_dump()
+
+        assert da == {"name": "alpha", "value": 1}
+        assert db == {"name": "beta", "value": 2}
+
+    def test_hookless_schema_is_cached(self):
+        """Hookless HybridModel schemas use the cached instance."""
+        class Plain(HybridModel):
+            name: str
+
+        # Warm up the cache
+        Plain.ma_load({"name": "first"})
+
+        assert Plain in _hybrid_instance_cache
+
+    def test_hooked_schema_skips_instance_cache(self):
+        """_default_schema_instance() refuses to cache schemas with hooks."""
+        class Greeter(HybridModel):
+            name: str
+
+        # Build a hooked schema class that wraps the same model
+        base_schema = Greeter.marshmallow_schema()
+
+        class HookedSchema(base_schema):  # type: ignore[misc]
+            @pre_load
+            def uppercase_name(self, data, **kwargs):
+                data["name"] = data["name"].upper()
+                return data
+
+        # Inject the hooked schema so _default_schema_instance() finds it
+        _hybrid_schema_cache[Greeter] = HookedSchema
+        _hybrid_instance_cache.pop(Greeter, None)
+
+        try:
+            result = Greeter.ma_load({"name": "alice"})
+
+            # Hook executed — proves the schema class was used
+            assert result.name == "ALICE"
+
+            # Guard prevented caching — proves the hook flag check works
+            assert Greeter not in _hybrid_instance_cache
+
+            # Second call also gets a fresh instance with working hook
+            result2 = Greeter.ma_load({"name": "bob"})
+            assert result2.name == "BOB"
+        finally:
+            # Clean up: restore the original hookless schema
+            _hybrid_schema_cache[Greeter] = base_schema
+            _hybrid_instance_cache.pop(Greeter, None)
+
+    def test_concurrent_ma_load_thread_safety(self):
+        """Concurrent ma_load calls from multiple threads are safe."""
+        class Counter(HybridModel):
+            name: str
+            idx: int
+
+        errors: queue.Queue[str] = queue.Queue()
+
+        def worker(thread_id: int):
+            for i in range(50):
+                result = Counter.ma_load({"name": f"t{thread_id}", "idx": i})
+                if result.name != f"t{thread_id}" or result.idx != i:
+                    errors.put(
+                        f"Thread {thread_id} iteration {i}: "
+                        f"got name={result.name}, idx={result.idx}"
+                    )
+
+        threads = [threading.Thread(target=worker, args=(t,)) for t in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        error_list = list(errors.queue)
+        assert error_list == [], f"Thread safety violations: {error_list}"
 
 
 class TestMarshmallowEcosystemCompatibility:
