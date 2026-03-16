@@ -8,6 +8,12 @@ on:
       - 'src/**'
       - 'mkdocs.yml'
       - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
   release:
     types: [published]
   workflow_dispatch:
