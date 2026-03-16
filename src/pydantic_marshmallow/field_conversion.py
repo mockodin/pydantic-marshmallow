@@ -113,9 +113,15 @@ def convert_pydantic_field(
         if hasattr(constraint, "max_length"):
             max_len = constraint.max_length
         if hasattr(constraint, "ge") or hasattr(constraint, "gt") or hasattr(constraint, "le") or hasattr(constraint, "lt"):
+            ge_val = getattr(constraint, "ge", None)
+            gt_val = getattr(constraint, "gt", None)
+            le_val = getattr(constraint, "le", None)
+            lt_val = getattr(constraint, "lt", None)
+            range_min = ge_val if ge_val is not None else gt_val
+            range_max = le_val if le_val is not None else lt_val
             validators.append(Range(
-                min=getattr(constraint, "ge", None) or getattr(constraint, "gt", None),
-                max=getattr(constraint, "le", None) or getattr(constraint, "lt", None),
+                min=range_min,
+                max=range_max,
                 min_inclusive=hasattr(constraint, "ge"),
                 max_inclusive=hasattr(constraint, "le"),
             ))
