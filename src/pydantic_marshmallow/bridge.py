@@ -65,7 +65,8 @@ _cache_lock = threading.RLock()
 _hybrid_schema_cache: dict[type[Any], type[PydanticSchema[Any]]] = {}
 
 # Module-level cache for HybridModel default schema *instances*
-# Avoids repeated __init__ (field setup, hook caching, dump map) per ma_load/ma_dump call
+# Only hookless schemas are cached — see _default_schema_instance() docstring.
+# Schemas with hooks get a fresh instance per call to prevent state leaks.
 _hybrid_instance_cache: dict[type[Any], PydanticSchema[Any]] = {}
 
 # Cache for schema_for/from_model - key is (model, schema_name, frozen options)
@@ -1531,17 +1532,35 @@ class HybridModel(BaseModel):
 
     @classmethod
     def _default_schema_instance(cls) -> PydanticSchema[Any]:
-        """Get or create a cached default schema instance (thread-safe).
+        """Get or create a default schema instance, cached when safe.
 
-        Avoids repeated __init__ overhead (field setup, hook caching,
-        dump-map building) for the common case of no custom kwargs.
+        Instance caching is only used when the schema has **no hooks**
+        (pre_load, post_load, validates, pre_dump, post_dump).  Hookless
+        schemas are effectively immutable during load/dump — MA uses local
+        variables for processing and PydanticSchema delegates validation
+        to ``model_validate()``, so no per-call state is stored on ``self``.
+
+        When hooks are present, a fresh instance is returned every time
+        (same as the pre-cache behavior) to avoid any risk of leaked
+        mutable state (e.g., a hook mutating ``self.context``).
         """
         cached = _hybrid_instance_cache.get(cls)
         if cached is not None:
             return cached
+        instance = cls.marshmallow_schema()()
+        # Only cache if the schema has no hooks that could mutate self
+        has_hooks = (
+            instance._cached_has_pre_load
+            or instance._cached_has_post_load
+            or instance._cached_has_validators
+            or instance._cached_has_pre_dump
+            or instance._cached_has_post_dump
+        )
+        if has_hooks:
+            return instance  # Fresh instance each call — safe
         with _cache_lock:
             if cls not in _hybrid_instance_cache:
-                _hybrid_instance_cache[cls] = cls.marshmallow_schema()()
+                _hybrid_instance_cache[cls] = instance
             return _hybrid_instance_cache[cls]
 
     @classmethod
