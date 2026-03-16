@@ -63,6 +63,32 @@ pip install pydantic-marshmallow
 
 **Requirements:** Python 3.10+, Pydantic 2.0+, Marshmallow 3.18+ (including 4.x)
 
+## Tested Compatibility
+
+Every release is validated against a matrix of Python, Pydantic, and Marshmallow versions via Docker-based CI.
+
+| Dependency | Latest Tested | Supported Range |
+|------------|--------------|-----------------|
+| **Python** | 3.10 – 3.14 | 3.10+ |
+| **Pydantic** | 2.12.5 | >=2.0.0, <3.0.0 |
+| **Marshmallow** | 3.26.2 / 4.2.2 | >=3.18.0, <5.0.0 |
+
+*Last reconciled: 2026-03-16 · Full matrix details in [CAPABILITY_MATRIX.md](CAPABILITY_MATRIX.md)*
+
+### Docker Test Matrix
+
+The CI matrix covers boundary and latest versions to catch regressions early:
+
+| Python | MA 3.18 | MA 3.26.2 | MA 4.2.2 | PD 2.0 | PD 2.5 | PD 2.12.5 |
+|--------|---------|-----------|----------|--------|--------|-----------|
+| 3.10 | ✅ (PD 2.0) | ✅ | — | ✅ | — | ✅ |
+| 3.11 | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 3.12 | — | ✅ | ✅ | — | ✅ | ✅ |
+| 3.13 | — | ✅ | ✅ | — | — | ✅ |
+| 3.14 | — | ✅ | ✅ | — | — | ✅ |
+
+> Run the matrix locally with `python docker/run_tests.py`.
+
 ## Quick Start
 
 ### Basic Usage
