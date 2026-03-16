@@ -1,4 +1,4 @@
-"""Comprehensive combination tests for marshmallow-pydantic.
+"""Comprehensive combination tests for pydantic-marshmallow.
 
 Tests complex scenarios combining multiple features from both platforms:
 - Nested models + validators + hooks

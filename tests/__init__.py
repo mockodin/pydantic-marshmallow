@@ -1,1 +1,1 @@
-"""Tests package for marshmallow-pydantic."""
+"""Tests package for pydantic-marshmallow."""

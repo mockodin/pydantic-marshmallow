@@ -1,4 +1,4 @@
-"""Edge case and comprehensive type testing for marshmallow-pydantic.
+"""Edge case and comprehensive type testing for pydantic-marshmallow.
 
 Tests cover boundary conditions, complex types, and unusual scenarios.
 """

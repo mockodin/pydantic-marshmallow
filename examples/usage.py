@@ -1,5 +1,5 @@
 """
-Example: Using marshmallow-pydantic
+Example: Using pydantic-marshmallow
 
 This example shows how to use Pydantic models with Marshmallow's ecosystem.
 """
