@@ -51,7 +51,7 @@ from pydantic import (
     model_validator,
 )
 
-from pydantic_marshmallow import PydanticSchema, schema_for
+from pydantic_marshmallow import HybridModel, PydanticSchema, schema_for
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -318,6 +318,76 @@ class ConstrainedModel(BaseModel):
     age: int = Field(ge=0, le=150)
     score: float = Field(ge=0.0, le=100.0)
     code: str = Field(pattern=r"^[A-Z]{3}-\d{4}$")
+
+
+class MetadataRichModel(BaseModel):
+    """Model with field metadata (description, title, examples)."""
+
+    name: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Full name of the user",
+        title="User Name",
+        examples=["Alice Smith", "Bob Jones"],
+    )
+    age: int = Field(
+        ge=0,
+        le=150,
+        description="Age in years",
+        title="Age",
+    )
+    email: str = Field(
+        description="Primary email address",
+        json_schema_extra={"format": "email"},
+    )
+    score: float = Field(
+        ge=0.0,
+        le=100.0,
+        description="Performance score",
+        examples=[95.5, 80.0],
+    )
+
+
+class MetadataRichMarshmallow(Schema):
+    """Equivalent hand-written Marshmallow with metadata."""
+
+    name = ma_fields.String(
+        required=True,
+        validate=validate.Length(min=1, max=100),
+        metadata={
+            "description": "Full name of the user",
+            "title": "User Name",
+            "examples": ["Alice Smith", "Bob Jones"],
+        },
+    )
+    age = ma_fields.Integer(
+        required=True,
+        validate=validate.Range(min=0, max=150),
+        metadata={"description": "Age in years", "title": "Age"},
+    )
+    email = ma_fields.String(
+        required=True,
+        metadata={
+            "description": "Primary email address",
+            "json_schema_extra": {"format": "email"},
+        },
+    )
+    score = ma_fields.Float(
+        required=True,
+        validate=validate.Range(min=0.0, max=100.0),
+        metadata={
+            "description": "Performance score",
+            "examples": [95.5, 80.0],
+        },
+    )
+
+
+class HybridUser(HybridModel):
+    """HybridModel subclass for benchmarking convenience API."""
+
+    name: str
+    age: int
+    email: str
 
 
 class KitchenSinkModel(BaseModel):
@@ -712,6 +782,13 @@ CONSTRAINED_DATA = {
     "age": 30,
     "score": 95.5,
     "code": "ABC-1234",
+}
+
+METADATA_RICH_DATA = {
+    "name": "Alice Smith",
+    "age": 30,
+    "email": "alice@example.com",
+    "score": 95.5,
 }
 
 KITCHEN_SINK_DATA = {
@@ -1300,6 +1377,101 @@ def create_type_coverage_suite() -> BenchmarkSuite:
 
 
 # =============================================================================
+# Feature Coverage Suite (metadata, HybridModel, schema construction)
+# =============================================================================
+
+
+def create_feature_coverage_suite() -> BenchmarkSuite:
+    """Create benchmark suite for new bridge features.
+
+    Covers:
+    - Field metadata forwarding (description, title, examples)
+    - Constraint-to-validator mapping overhead
+    - HybridModel convenience API vs direct schema usage
+    - Schema construction cost (isolated)
+    """
+    suite = BenchmarkSuite("feature_coverage", iterations=1000, warmup=100)
+
+    # --- Metadata-rich fields (bridge forwards description/title/examples) ---
+    metadata_bridge = schema_for(MetadataRichModel)()
+    metadata_ma = MetadataRichMarshmallow()
+
+    @suite.add("metadata_rich_bridge")
+    def bench_metadata_bridge():
+        metadata_bridge.load(METADATA_RICH_DATA)
+
+    @suite.add("metadata_rich_marshmallow")
+    def bench_metadata_ma():
+        metadata_ma.load(METADATA_RICH_DATA)
+
+    @suite.add("metadata_rich_raw_pydantic")
+    def bench_metadata_pydantic():
+        MetadataRichModel.model_validate(METADATA_RICH_DATA)
+
+    # --- HybridModel convenience API ---
+    # ma_load uses cached schema instance; direct schema is the baseline comparison
+    hybrid_direct_schema = schema_for(HybridUser)()
+    hybrid_user = HybridUser(name="Alice Smith", age=30, email="alice@example.com")
+
+    @suite.add("hybrid_load_bridge")
+    def bench_hybrid_load():
+        HybridUser.ma_load(SIMPLE_DATA)
+
+    @suite.add("hybrid_load_marshmallow")
+    def bench_hybrid_direct():
+        hybrid_direct_schema.load(SIMPLE_DATA)
+
+    @suite.add("hybrid_load_raw_pydantic")
+    def bench_hybrid_load_pydantic():
+        HybridUser.model_validate(SIMPLE_DATA)
+
+    @suite.add("hybrid_dump_bridge")
+    def bench_hybrid_dump():
+        hybrid_user.ma_dump()
+
+    @suite.add("hybrid_dump_marshmallow")
+    def bench_hybrid_direct_dump():
+        hybrid_direct_schema.dump(hybrid_user)
+
+    @suite.add("hybrid_dump_raw_pydantic")
+    def bench_hybrid_dump_pydantic():
+        hybrid_user.model_dump()
+
+    return suite
+
+
+def create_construction_suite() -> BenchmarkSuite:
+    """Create benchmark suite for schema construction cost (isolated).
+
+    Measures the one-time cost of creating a schema instance from a Pydantic model,
+    including field conversion, metadata forwarding, and constraint mapping.
+    """
+    suite = BenchmarkSuite("schema_construction", iterations=500, warmup=50)
+
+    @suite.add("simple")
+    def bench_construct_simple():
+        schema_for(SimpleUser)()
+
+    @suite.add("constrained")
+    def bench_construct_constrained():
+        schema_for(ConstrainedModel)()
+
+    @suite.add("metadata_rich")
+    def bench_construct_metadata():
+        schema_for(MetadataRichModel)()
+
+    @suite.add("nested")
+    def bench_construct_nested():
+        schema_for(PersonWithAddress)()
+
+    @suite.add("kitchen_sink")
+    def bench_construct_kitchen_sink():
+        schema_for(KitchenSinkModel)()
+
+    return suite
+
+
+# =============================================================================
 # Main Entry Point
 # =============================================================================
 
@@ -1322,7 +1494,7 @@ Examples:
     parser.add_argument(
         "--suite",
         nargs="+",
-        choices=["core", "nested", "features", "hooks", "batch", "options", "error", "types", "all"],
+        choices=["core", "nested", "features", "hooks", "batch", "options", "error", "types", "coverage", "construction", "all"],
         default=["all"],
         help="Benchmark suites to run (default: all)",
     )
@@ -1377,6 +1549,8 @@ Examples:
         "options": create_options_suite,
         "error": create_error_suite,
         "types": create_type_coverage_suite,
+        "coverage": create_feature_coverage_suite,
+        "construction": create_construction_suite,
     }
 
     if "all" in args.suite:
