@@ -171,11 +171,11 @@ def _get_git_commit() -> str | None:
 def _get_package_versions() -> dict[str, str]:
     """Get versions of relevant packages."""
     versions = {}
-    packages = ["marshmallow", "pydantic", "marshmallow-pydantic"]
+    packages = ["marshmallow", "pydantic", "pydantic-marshmallow"]
 
     for pkg in packages:
         try:
-            if pkg == "marshmallow-pydantic":
+            if pkg == "pydantic-marshmallow":
                 from pydantic_marshmallow import __version__
 
                 versions[pkg] = __version__
@@ -731,10 +731,6 @@ _OUTLIER_EXPLANATIONS: dict[str, str] = {
     "validated_load": (
         "Uses `EmailStr` (RFC 5321) — see email_validated row."
     ),
-    "simple_dump": (
-        "Dump path routes through `model_dump()` then MA serialization. "
-        "No fast-dump optimization applied (would break alias support)."
-    ),
     "computed_field_dump": (
         "Same dump-path overhead, plus Pydantic `@computed_field` evaluation."
     ),
@@ -905,12 +901,16 @@ def _compute_insights(
             f"adds ~{avg_overhead:.1f}\u00b5s of Marshmallow schema overhead "
             "on top of Pydantic's validation"
         )
-
-    insights.append(
-        "**Hook caching** (the load-path optimization) short-circuits "
-        "Marshmallow hook machinery when no hooks are defined, saving "
-        "~0.5\u00b5s per load"
-    )
+        insights.append(
+            "**Hook caching** (the load-path optimization) short-circuits "
+            "Marshmallow hook machinery when no hooks are defined, saving "
+            f"~{avg_overhead:.1f}\u00b5s per load"
+        )
+    else:
+        insights.append(
+            "**Hook caching** (the load-path optimization) short-circuits "
+            "Marshmallow hook machinery when no hooks are defined"
+        )
 
     return insights
 

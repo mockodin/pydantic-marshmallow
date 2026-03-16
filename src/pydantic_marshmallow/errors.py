@@ -1,5 +1,5 @@
 """
-Error handling utilities for the Marshmallow-Pydantic bridge.
+Error handling utilities for the Pydantic-Marshmallow bridge.
 
 This module provides:
 - BridgeValidationError: Exception with valid_data tracking for partial success

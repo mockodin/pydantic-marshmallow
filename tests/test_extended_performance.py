@@ -1,4 +1,4 @@
-"""Extended performance benchmarks for marshmallow-pydantic.
+"""Extended performance benchmarks for pydantic-marshmallow.
 
 Covers additional scenarios:
 - With hooks (pre_load, post_load)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""CLI tool for running marshmallow-pydantic benchmarks.
+"""CLI tool for running pydantic-marshmallow benchmarks.
 
 Usage:
     # Run all benchmarks
@@ -299,7 +299,7 @@ class CollectionModel(BaseModel):
     tags: list[str]
     scores: list[int]
     metadata: dict[str, str]
-    unique_ids: set[int]
+    unique_ids: list[int]
 
 
 class OptionalModel(BaseModel):
@@ -1307,7 +1307,7 @@ def create_type_coverage_suite() -> BenchmarkSuite:
 def main():
     """Run benchmarks from command line."""
     parser = argparse.ArgumentParser(
-        description="Run marshmallow-pydantic benchmarks",
+        description="Run pydantic-marshmallow benchmarks",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

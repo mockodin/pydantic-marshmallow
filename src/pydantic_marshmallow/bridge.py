@@ -352,6 +352,10 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
         for field_name, field_obj in self.fields.items():
             self.on_bind_field(field_name, field_obj)
 
+        # Build dump fast-path cache AFTER on_bind_field so subclass
+        # overrides that mutate data_key/attribute are reflected.
+        self._build_dump_field_map()
+
     def _cache_hook_flags(self) -> None:
         """Cache hook presence flags to avoid per-call iteration in hot paths."""
         hooks = self._hooks
@@ -387,6 +391,12 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
             self._cached_has_pre_dump or self._cached_has_post_dump
         )
 
+    def _build_dump_field_map(self) -> None:
+        """Build dump fast-path cache.
+
+        Called AFTER on_bind_field() so subclass overrides that mutate
+        data_key or attribute are reflected in the cached map.
+        """
         # Dump fast-path caching: precompute field map and eligibility
         self._dump_field_map: dict[str, str] = {}
         self._can_fast_dump: bool = False
@@ -409,6 +419,11 @@ class _PydanticSchema(Schema, Generic[M], metaclass=PydanticSchemaMeta):
                     # Use exact type match (not isinstance) to avoid catching
                     # subclasses like MA3's UUID(String) that need _serialize()
                     if type(field_obj) not in _FAST_DUMP_TYPES:
+                        can_fast = False
+                        break
+                    # If MA's attribute indirection is set, the source attr
+                    # differs from attr_name — fall back to MA's dump path.
+                    if getattr(field_obj, "attribute", None) is not None:
                         can_fast = False
                         break
                     field_map[attr_name] = field_obj.data_key or attr_name
@@ -1434,7 +1449,7 @@ def pydantic_schema(cls: type[M]) -> type[M]:
     """
     Decorator that adds a `.Schema` attribute to a Pydantic model.
 
-    This is the simplest way to use marshmallow-pydantic. Just decorate
+    This is the simplest way to use pydantic-marshmallow. Just decorate
     your Pydantic model and use `.Schema` anywhere Marshmallow is expected.
 
     Example:

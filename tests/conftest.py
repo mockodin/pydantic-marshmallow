@@ -1,4 +1,4 @@
-"""Shared test fixtures for marshmallow-pydantic tests.
+"""Shared test fixtures for pydantic-marshmallow tests.
 
 This module provides reusable models, schemas, and test data to eliminate
 duplication across test files. Import fixtures and models from here rather

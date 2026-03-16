@@ -37,7 +37,7 @@ The bridge delegates validation to Pydantic's Rust-powered core, bypassing Marsh
 
 *Benchmarks: Python 3.11, median of 3 runs with IQR outlier removal. Run `python -m benchmarks.run_benchmarks` to reproduce.*
 
-> **Full benchmark report:** See [benchmarks/BENCHMARK_REPORT.md](benchmarks/BENCHMARK_REPORT.md) for per-type breakdowns across all supported types (scalars, datetime, decimal, UUID, email, URL, IP, collections, optionals, constrained fields, and kitchen-sink models).
+> **Full benchmark report:** See [benchmarks/BENCHMARK_REPORT.md](benchmarks/BENCHMARK_REPORT.md) for per-type breakdowns, methodology notes, and environment details.
 
 ### Why it matters
 

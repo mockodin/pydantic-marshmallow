@@ -30,6 +30,7 @@ from marshmallow.exceptions import ValidationError
 from pydantic import BaseModel, Field
 
 from pydantic_marshmallow import PydanticSchema, schema_for
+from pydantic_marshmallow.bridge import _MARSHMALLOW_4_PLUS
 
 # =============================================================================
 # Models for contract tests
@@ -214,10 +215,10 @@ class TestSchemaInitOptions:
         Schema = schema_for(ContractUser)
         schema = Schema(only=("name",))
         result = schema.load({"name": "Alice", "email": "a@b.com", "age": 25})
-        if isinstance(result, dict):
-            assert "name" in result
-        else:
-            assert hasattr(result, "name")
+        dumped = Schema(only=("name",)).dump(result)
+        assert "name" in dumped
+        assert "email" not in dumped
+        assert "age" not in dumped
 
 
 # =============================================================================
@@ -441,8 +442,10 @@ class TestValidatesSchemaContract:
 # From MA test_context.py: Context propagation
 # =============================================================================
 
-@pytest.mark.skip(
-    reason="MA 4.x removed context parameter from Schema.__init__ - use contextvars instead"
+
+@pytest.mark.skipif(
+    _MARSHMALLOW_4_PLUS,
+    reason="MA 4.x removed the context parameter from Schema.__init__",
 )
 class TestContextPropagation:
     """Context must be available in hooks, validators, and nested schemas."""

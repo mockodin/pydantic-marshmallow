@@ -1,4 +1,4 @@
-"""Extended test coverage for marshmallow-pydantic.
+"""Extended test coverage for pydantic-marshmallow.
 
 Tests cover:
 - Pydantic model validators (@model_validator)
