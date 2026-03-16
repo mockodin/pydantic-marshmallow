@@ -15,7 +15,7 @@ catching integration issues that isolated tests might miss.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Any, Literal
@@ -229,7 +229,7 @@ class ProjectSchema(PydanticSchema[Project]):
             data["id"] = data["id"]  # Pydantic will handle conversion
         # Set default created_at if not provided
         if "created_at" not in data:
-            data["created_at"] = datetime.utcnow().isoformat()
+            data["created_at"] = datetime.now(timezone.utc).isoformat()
         return data
 
     @post_load
@@ -265,7 +265,7 @@ class PersonSchema(PydanticSchema[Person]):
 
     @post_dump
     def add_metadata(self, data: dict[str, Any], **kwargs) -> dict[str, Any]:
-        data["_serialized_at"] = datetime.utcnow().isoformat()
+        data["_serialized_at"] = datetime.now(timezone.utc).isoformat()
         return data
 
 

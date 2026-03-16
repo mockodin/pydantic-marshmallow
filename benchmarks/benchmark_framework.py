@@ -178,13 +178,13 @@ def _get_package_versions() -> dict[str, str]:
             if pkg == "pydantic-marshmallow":
                 from pydantic_marshmallow import __version__
 
-                versions[pkg] = __version__
+                versions[pkg] = __version__ if __version__ else "current (editable)"
             else:
                 import importlib.metadata
 
                 versions[pkg] = importlib.metadata.version(pkg)
         except Exception:
-            versions[pkg] = "unknown"
+            versions[pkg] = "current (editable)" if pkg == "pydantic-marshmallow" else "unknown"
 
     return versions
 
@@ -915,6 +915,28 @@ def _compute_insights(
     return insights
 
 
+def _compute_overhead_ratios(
+    comparisons: list[
+        tuple[str, str, BenchmarkResult, BenchmarkResult, BenchmarkResult | None]
+    ],
+) -> list[tuple[str, float, float]]:
+    """Compute host-invariant overhead ratios (bridge / raw pydantic).
+
+    Returns list of (display_name, ratio, overhead_us) sorted by ratio descending.
+    Only includes benchmarks where raw pydantic baseline is available.
+    """
+    ratios: list[tuple[str, float, float]] = []
+    for _suite, category, bridge, _ma, raw in comparisons:
+        if raw and raw.median_us > 0 and bridge.median_us > 0:
+            ratio = bridge.median_us / raw.median_us
+            overhead_us = bridge.median_us - raw.median_us
+            display = category.replace("_", " ").title()
+            ratios.append((display, ratio, overhead_us))
+    # Sort by ratio descending (highest overhead first)
+    ratios.sort(key=lambda x: x[1], reverse=True)
+    return ratios
+
+
 def format_markdown_report(
     all_results: list[BenchmarkSuiteResult],
     *,
@@ -957,6 +979,7 @@ def format_markdown_report(
     lines.append("- **IQR outlier removal** for stable statistics")
     lines.append("- GC disabled during measurement")
     lines.append("- All times in **microseconds (\u00b5s)**")
+    lines.append("- **Overhead Ratio** = Bridge / Raw Pydantic — host-invariant metric for cross-run comparison")
     lines.append("")
 
     # Collect all comparison data for analysis sections
@@ -980,14 +1003,14 @@ def format_markdown_report(
 
         suite_has_outlier = False
         if has_comparison:
-            # Comparison table with speedup
+            # Comparison table with speedup and overhead ratio
             lines.append(
                 "| Benchmark | Bridge (\u00b5s) | Native MA (\u00b5s) "
-                "| Raw Pydantic (\u00b5s) | Bridge vs Native MA |"
+                "| Raw Pydantic (\u00b5s) | Bridge vs MA | Overhead Ratio |"
             )
             lines.append(
                 "|-----------|------------|-----------------|"
-                "-------------------|---------------------|"
+                "-------------------|--------------|----------------|"
             )
 
             for category, variants in sorted(groups.items()):
@@ -1016,9 +1039,17 @@ def format_markdown_report(
                 else:
                     speedup = "-"
 
+                # Overhead ratio: bridge / raw pydantic (host-invariant)
+                if bridge and raw and raw.median_us > 0:
+                    overhead = bridge.median_us / raw.median_us
+                    overhead_str = f"{overhead:.2f}x"
+                else:
+                    overhead_str = "\u2014"
+
                 display = category.replace("_", " ").title()
                 lines.append(
-                    f"| {display} | {b_str} | {m_str} | {r_str} | {speedup} |"
+                    f"| {display} | {b_str} | {m_str} | {r_str} "
+                    f"| {speedup} | {overhead_str} |"
                 )
         else:
             # Simple table for non-comparison suites
@@ -1074,6 +1105,36 @@ def format_markdown_report(
     for insight in insights:
         lines.append(f"- {insight}")
     lines.append("")
+
+    # Cross-run stability section (variance normalization)
+    overhead_ratios = _compute_overhead_ratios(all_comparisons)
+    if overhead_ratios:
+        lines.append("---")
+        lines.append("")
+        lines.append("## Cross-Run Stability (Overhead Ratios)")
+        lines.append("")
+        lines.append(
+            "Absolute timings vary with host load, CPU frequency, and thermals. "
+            "The **Overhead Ratio** (Bridge \u00b5s \u00f7 Raw Pydantic \u00b5s) cancels out "
+            "host variance because both measurements experience the same conditions. "
+            "Compare this column across runs to detect real regressions vs noise."
+        )
+        lines.append("")
+        lines.append("| Benchmark | Overhead Ratio | Bridge Overhead (\u00b5s) |")
+        lines.append("|-----------|----------------|----------------------|")
+        for name, ratio, overhead_us in overhead_ratios:
+            lines.append(f"| {name} | {ratio:.2f}x | +{overhead_us:.1f} |")
+        lines.append("")
+        if len(overhead_ratios) >= 2:
+            ratios_only = [r for _, r, _ in overhead_ratios]
+            avg_ratio = sum(ratios_only) / len(ratios_only)
+            lines.append(
+                f"> **Average overhead ratio: {avg_ratio:.2f}x** \u2014 "
+                "if this changes significantly between runs on different hosts, "
+                "it indicates a real performance change, not host variance."
+            )
+            lines.append("")
+
     lines.append("---")
     lines.append("")
     lines.append(

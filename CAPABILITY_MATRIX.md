@@ -2,9 +2,10 @@
 
 This document maps features from both libraries and tracks bridge support.
 
-**Last Updated**: February 2026  
-**Tested Versions**: Marshmallow 3.x/4.x, Pydantic 2.x  
-**Test Suite**: 515+ tests
+**Last Updated**: March 2026  
+**Last Reconciled**: 2026-03-16  
+**Tested Versions**: Marshmallow 3.18–3.26.2 / 4.0–4.2.2, Pydantic 2.0–2.12.5, Python 3.10–3.14  
+**Test Suite**: 643+ tests
 
 ## Legend
 - ✅ Fully supported and tested

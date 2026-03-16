@@ -233,9 +233,11 @@ class TestNestedSchemas:
         user_schema = openapi_spec["components"]["schemas"]["UserWithAddress"]
 
         assert "address" in user_schema["properties"]
-        # Nested schema should have its own properties
+        # Nested schema should have its own properties, a $ref, or be
+        # wrapped in allOf (apispec wraps $ref in allOf when metadata like
+        # description is present on the field).
         address_prop = user_schema["properties"]["address"]
-        assert "properties" in address_prop or "$ref" in address_prop
+        assert "properties" in address_prop or "$ref" in address_prop or "allOf" in address_prop
 
     def test_nested_array_schema(self, spec):
         """Nested schemas in arrays work correctly."""
@@ -538,3 +540,89 @@ class TestEdgeCases:
 
         openapi_spec = spec.to_dict()
         assert "Level1" in openapi_spec["components"]["schemas"]
+
+
+class TestConstraintOpenAPI:
+    """Test that Pydantic constraints produce correct OpenAPI attributes."""
+
+    def test_min_max_length_in_openapi(self, spec):
+        """Field(min_length=1, max_length=100) produces minLength/maxLength."""
+        UserSchema = schema_for(UserPydantic)
+        spec.components.schema("User", schema=UserSchema)
+
+        openapi_spec = spec.to_dict()
+        name_prop = openapi_spec["components"]["schemas"]["User"]["properties"]["name"]
+
+        assert name_prop.get("minLength") == 1
+        assert name_prop.get("maxLength") == 100
+
+    def test_ge_zero_in_openapi(self, spec):
+        """Field(ge=0) correctly produces minimum=0 (falsy bound edge case)."""
+        UserSchema = schema_for(UserPydantic)
+        spec.components.schema("User", schema=UserSchema)
+
+        openapi_spec = spec.to_dict()
+        age_prop = openapi_spec["components"]["schemas"]["User"]["properties"]["age"]
+
+        # ge=0 must not be dropped — this is the critical edge case
+        assert age_prop.get("minimum") == 0
+        assert age_prop.get("maximum") == 150
+
+    def test_exclusive_minimum_in_openapi(self, spec):
+        """Field(gt=0) produces exclusiveMinimum."""
+        ProductSchema = schema_for(ProductPydantic)
+        spec.components.schema("Product", schema=ProductSchema)
+
+        openapi_spec = spec.to_dict()
+        price_prop = openapi_spec["components"]["schemas"]["Product"]["properties"][
+            "price"
+        ]
+
+        # gt=0 should produce exclusiveMinimum
+        assert price_prop.get("exclusiveMinimum") == 0 or price_prop.get("minimum") == 0
+
+    def test_pattern_in_openapi(self, spec):
+        """Field(pattern=...) produces pattern in OpenAPI."""
+        from pydantic import BaseModel, Field
+
+        class PatternModel(BaseModel):
+            code: str = Field(pattern=r"^[A-Z]{3}$")
+
+        PatternSchema = schema_for(PatternModel)
+        spec.components.schema("PatternModel", schema=PatternSchema)
+
+        openapi_spec = spec.to_dict()
+        code_prop = openapi_spec["components"]["schemas"]["PatternModel"]["properties"][
+            "code"
+        ]
+
+        assert code_prop.get("pattern") == r"^[A-Z]{3}$"
+
+    def test_description_in_openapi(self, spec):
+        """Field(description=...) produces description in OpenAPI."""
+        UserSchema = schema_for(UserPydantic)
+        spec.components.schema("User", schema=UserSchema)
+
+        openapi_spec = spec.to_dict()
+        name_prop = openapi_spec["components"]["schemas"]["User"]["properties"]["name"]
+
+        assert name_prop.get("description") == "User's full name"
+
+    def test_combined_constraints(self, spec):
+        """Multiple constraints on one field all appear in OpenAPI."""
+        from pydantic import BaseModel, Field
+
+        class ConstrainedModel(BaseModel):
+            score: int = Field(ge=0, le=100, description="Score from 0 to 100")
+
+        ConstrainedSchema = schema_for(ConstrainedModel)
+        spec.components.schema("Constrained", schema=ConstrainedSchema)
+
+        openapi_spec = spec.to_dict()
+        score_prop = openapi_spec["components"]["schemas"]["Constrained"][
+            "properties"
+        ]["score"]
+
+        assert score_prop.get("minimum") == 0
+        assert score_prop.get("maximum") == 100
+        assert score_prop.get("description") == "Score from 0 to 100"

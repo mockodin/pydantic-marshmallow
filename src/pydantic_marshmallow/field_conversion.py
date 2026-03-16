@@ -10,6 +10,7 @@ from __future__ import annotations
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
 
+from marshmallow.validate import Length, Range, Regexp
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
@@ -56,6 +57,8 @@ def convert_pydantic_field(
       Validators are **appended** to any existing ``ma_field.validators`` (e.g., ``OneOf``
       for ``Literal`` types), not replaced.  These validators exist solely for OpenAPI
       schema introspection (apispec/flask-smorest); Pydantic owns actual validation.
+    - Metadata forwarding (description, title, examples, json_schema_extra → MA metadata)
+    - Constraint-to-validator mapping (min_length, max_length, ge/le/gt/lt, pattern → MA validators)
 
     Args:
         field_name: Name of the field
@@ -89,6 +92,53 @@ def convert_pydantic_field(
     is_union = origin is Union or origin is UnionType
     if is_union and type(None) in args:
         ma_field.allow_none = True
+
+    # Forward Pydantic field metadata to MA's metadata dict.
+    # Ecosystem tools (apispec, flask-smorest) read this for OpenAPI generation.
+    metadata: dict[str, Any] = {}
+    if field_info.description:
+        metadata["description"] = field_info.description
+    if field_info.title:
+        metadata["title"] = field_info.title
+    if field_info.examples:
+        metadata["examples"] = field_info.examples
+    json_extra = field_info.json_schema_extra
+    if json_extra and isinstance(json_extra, dict):
+        metadata["json_schema_extra"] = json_extra
+    if metadata:
+        ma_field.metadata = {**ma_field.metadata, **metadata}
+
+    # Map Pydantic constraints to MA validators for OpenAPI schema generation.
+    # These are never invoked on load (Pydantic owns validation), but apispec
+    # inspects them to produce minLength, maxLength, minimum, maximum, pattern.
+    validators: list[Any] = []
+    pydantic_metadata = getattr(field_info, "metadata", None) or []
+    min_len = None
+    max_len = None
+    for constraint in pydantic_metadata:
+        if hasattr(constraint, "min_length"):
+            min_len = constraint.min_length
+        if hasattr(constraint, "max_length"):
+            max_len = constraint.max_length
+        if hasattr(constraint, "ge") or hasattr(constraint, "gt") or hasattr(constraint, "le") or hasattr(constraint, "lt"):
+            ge_val = getattr(constraint, "ge", None)
+            gt_val = getattr(constraint, "gt", None)
+            le_val = getattr(constraint, "le", None)
+            lt_val = getattr(constraint, "lt", None)
+            range_min = ge_val if ge_val is not None else gt_val
+            range_max = le_val if le_val is not None else lt_val
+            validators.append(Range(
+                min=range_min,
+                max=range_max,
+                min_inclusive=hasattr(constraint, "ge"),
+                max_inclusive=hasattr(constraint, "le"),
+            ))
+        if hasattr(constraint, "pattern"):
+            validators.append(Regexp(constraint.pattern))
+    if min_len is not None or max_len is not None:
+        validators.append(Length(min=min_len, max=max_len))
+    if validators:
+        ma_field.validators = list(ma_field.validators) + validators
 
     return ma_field
 
