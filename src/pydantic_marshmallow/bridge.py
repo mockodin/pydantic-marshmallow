@@ -2,7 +2,7 @@
 Bridge between Pydantic models and Marshmallow schemas.
 
 Pydantic's Rust-based validation with full Marshmallow compatibility.
-Flow: Input → Marshmallow pre_load → PYDANTIC VALIDATES → Marshmallow post_load → Output
+Flow: Input → pre_load → PYDANTIC VALIDATES → @validates → @validates_schema → post_load → Output
 """
 
 from __future__ import annotations
@@ -1492,6 +1492,12 @@ class HybridModel(BaseModel):
 
     This provides a single class that gives you both Pydantic model
     capabilities AND Marshmallow schema functionality.
+
+    Instance Caching:
+        ``ma_load()`` / ``ma_dump()`` cache a default schema instance for
+        performance.  Schemas with hooks (pre_load, post_load, @validates,
+        pre_dump, post_dump) always get a fresh instance to prevent leaked
+        mutable state.  The cache is protected by an ``RLock``.
 
     Example:
         class User(HybridModel):

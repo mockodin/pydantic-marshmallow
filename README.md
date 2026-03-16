@@ -55,6 +55,9 @@ The bridge delegates validation to Pydantic's Rust-powered core, bypassing Marsh
 - **Partial Loading**: `partial=True` or `partial=('field1', 'field2')`
 - **Unknown Fields**: `unknown=RAISE/EXCLUDE/INCLUDE`
 - **Computed Fields**: Pydantic `@computed_field` support in serialization
+- **Metadata Forwarding**: Pydantic `Field()` metadata (description, title, examples) auto-forwarded to Marshmallow for OpenAPI generation
+- **Constraint Mapping**: Pydantic constraints (min_length, max_length, ge/le, pattern) mapped to Marshmallow validators for OpenAPI
+- **HybridModel Caching**: Thread-safe instance caching for hookless schemas
 
 ## Installation
 

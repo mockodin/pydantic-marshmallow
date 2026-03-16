@@ -136,3 +136,76 @@ schema.dump(user, exclude_defaults=True)
 schema.dump(user, exclude_unset=True)
 # {"name": "Alice"}
 ```
+
+## Metadata Forwarding
+
+Pydantic `Field()` metadata is automatically forwarded to Marshmallow fields, enabling ecosystem tools like **apispec** and **flask-smorest** to generate accurate OpenAPI schemas.
+
+!!! info "Metadata is merged"
+    Forwarded metadata is **merged** into any existing Marshmallow field metadata
+    (e.g., metadata set by the type mapping), not replaced.
+
+Supported metadata:
+
+| Pydantic `Field()` | Marshmallow `field.metadata` key |
+|---------------------|----------------------------------|
+| `description="..."` | `"description"` |
+| `title="..."` | `"title"` |
+| `examples=[...]` | `"examples"` |
+| `json_schema_extra={...}` | `"json_schema_extra"` |
+
+```python
+from pydantic import BaseModel, Field
+from pydantic_marshmallow import PydanticSchema
+
+class Product(BaseModel):
+    name: str = Field(description="Product display name", title="Name")
+    price: float = Field(description="Price in USD", examples=[9.99, 19.99])
+
+ProductSchema = PydanticSchema.from_model(Product)
+schema = ProductSchema()
+
+# Metadata is available on the Marshmallow field
+print(schema.fields["name"].metadata)
+# {"description": "Product display name", "title": "Name"}
+
+# apispec reads this automatically for OpenAPI generation
+```
+
+## Constraint-to-Validator Mapping
+
+Pydantic field constraints are mapped to Marshmallow validators so that ecosystem tools can generate accurate OpenAPI schemas with `minLength`, `maxLength`, `minimum`, `maximum`, and `pattern`.
+
+!!! note "Validation is still Pydantic's job"
+    These validators are **never invoked during `load()`** — Pydantic owns all validation.
+    They exist solely for schema introspection by tools like apispec.
+
+!!! info "Validators are appended"
+    Constraint validators are **appended** to any existing field validators
+    (e.g., `OneOf` for `Literal` types), not replaced.
+
+| Pydantic Constraint | Marshmallow Validator | OpenAPI Output |
+|--------------------|-----------------------|----------------|
+| `min_length` / `max_length` | `Length(min=, max=)` | `minLength` / `maxLength` |
+| `ge` / `le` / `gt` / `lt` | `Range(min=, max=)` | `minimum` / `maximum` |
+| `pattern` | `Regexp(regex)` | `pattern` |
+
+```python
+from pydantic import BaseModel, Field
+from pydantic_marshmallow import PydanticSchema
+
+class User(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    age: int = Field(ge=0, le=150)
+    email: str = Field(pattern=r"^[\w.-]+@[\w.-]+\.\w+$")
+
+UserSchema = PydanticSchema.from_model(User)
+schema = UserSchema()
+
+# Validators are set on the Marshmallow fields
+print(schema.fields["name"].validators)
+# [Length(min=1, max=100)]
+
+print(schema.fields["age"].validators)
+# [Range(min=0, max=150)]
+```
